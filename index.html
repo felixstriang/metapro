@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Metapro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body {
+            background: radial-gradient(circle at 20% 0%, #e6f0ff 0%, transparent 55%),
+                        radial-gradient(circle at 100% 100%, #eaf2ff 0%, transparent 45%),
+                        #f5f8fd;
+            color: #0f172a;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            background-attachment: fixed;
+        }
+        .card {
+            background: linear-gradient(160deg, #ffffff 0%, #f7faff 100%);
+            border: 1px solid #e3ebf7;
+            border-radius: 20px;
+            box-shadow: 0 1px 2px rgba(37,99,235,0.05), 0 4px 10px rgba(37,99,235,0.06), 0 14px 28px rgba(37,99,235,0.07), 0 28px 56px rgba(37,99,235,0.05);
+            transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), box-shadow 0.25s;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 2px 4px rgba(37,99,235,0.08), 0 8px 20px rgba(37,99,235,0.10), 0 24px 48px rgba(37,99,235,0.12), 0 40px 80px rgba(37,99,235,0.08);
+        }
+        .badge-strong-buy { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .badge-buy { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+        .badge-sell { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .badge-strong-sell { background: #fecaca; color: #7f1d1d; border: 1px solid #f87171; }
+        .badge-wait { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+        .status-tp { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .status-sl { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .status-active { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        .status-expired { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        .status-pending { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .status-suspended { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .admin-badge { background: #ede9fe; color: #6d28d9; border: 1px solid #c4b5fd; }
+        .lock-badge { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .loading { opacity: 0.5; pointer-events: none; }
+        .spinner { border: 3px solid #dbeafe; border-top: 3px solid #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .accuracy-bar { height: 8px; border-radius: 4px; background: #e0ebfa; overflow: hidden; }
+        .accuracy-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+        input, button { font-family: inherit; }
+        input:focus { outline: none; }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(59,130,246,0.35), 0 2px 4px rgba(37,99,235,0.25);
+            transition: all 0.2s;
+        }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(59,130,246,0.45); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .input-field { background: #f4f8ff; border: 1px solid #dbe6f7; transition: all 0.2s; }
+        .input-field:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
+        .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    </style>
+</head>
+<body class="min-h-screen p-3 md:p-6">
+
+    <div id="authOverlay" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: radial-gradient(circle at 50% 0%, #dbeafe 0%, #f5f8fd 60%);">
+        <div class="card p-6 md:p-8 w-full max-w-md">
+            <div class="text-center mb-6">
+                <div class="brand-mark inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-3">
+                <img src="images/metapro2.png" alt="MetaPro Logo" class="h-50 w-50 object-contain">
+                </div>
+                <h1 class="text-2xl font-bold text-blue-900">Metapro<span class="text-blue-500 text-lg font-semibold"></span></h1>
+                <p class="text-xs text-blue-500 mt-1">XAUUSD Trading Signals</p>
+		<p class="text-xs text-blue-500 mt-1">Metatrader 5 or Metatrader 4 platform</p>
+            </div>
+            <div class="flex mb-5 bg-blue-50 rounded-xl p-1">
+                <button id="tabLogin" onclick="showLoginForm()" class="flex-1 py-2 rounded-lg text-sm font-semibold bg-white text-blue-700 shadow-sm transition">Login</button>
+                <button id="tabRegister" onclick="showRegisterForm()" class="flex-1 py-2 rounded-lg text-sm font-semibold text-blue-400 transition">Daftar</button>
+            </div>
+            <div id="loginForm">
+                <div class="mb-3">
+                    <label class="block text-xs text-blue-800 mb-1.5 font-semibold">Username</label>
+                    <input id="loginUsername" type="text" placeholder="Masukkan username" class="input-field w-full rounded-lg px-4 py-3 text-sm" autocomplete="username">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-xs text-blue-800 mb-1.5 font-semibold">Password</label>
+                    <input id="loginPassword" type="password" placeholder="Masukkan password" class="input-field w-full rounded-lg px-4 py-3 text-sm" autocomplete="current-password">
+                </div>
+                <button onclick="doLogin()" class="btn-primary w-full font-semibold px-5 py-3 rounded-xl flex items-center justify-center gap-2">
+                    <span>Masuk</span><span>→</span>
+                </button>
+            </div>
+            <div id="registerForm" class="hidden">
+                <div class="mb-3">
+                    <label class="block text-xs text-blue-800 mb-1.5 font-semibold">Username</label>
+                    <input id="regUsername" type="text" placeholder="3-20 karakter (huruf/angka/_)" class="input-field w-full rounded-lg px-4 py-3 text-sm" autocomplete="username">
+                </div>
+                <div class="mb-3">
+                    <label class="block text-xs text-blue-800 mb-1.5 font-semibold">Password</label>
+                    <input id="regPassword" type="password" placeholder="Minimal 6 karakter" class="input-field w-full rounded-lg px-4 py-3 text-sm" autocomplete="new-password">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-xs text-blue-800 mb-1.5 font-semibold">Konfirmasi Password</label>
+                    <input id="regPasswordConfirm" type="password" placeholder="Ulangi password" class="input-field w-full rounded-lg px-4 py-3 text-sm" autocomplete="new-password">
+                </div>
+                <button onclick="doRegister()" class="btn-primary w-full font-semibold px-5 py-3 rounded-xl flex items-center justify-center gap-2">
+                    <span>Daftar Akun</span><span>→</span>
+                </button>
+            </div>
+            <p id="authError" class="text-xs text-red-500 mt-3 text-center min-h-[16px] font-medium"></p>
+            <p id="authSuccess" class="text-xs text-blue-600 mt-1 text-center min-h-[16px] font-medium"></p>
+            <div class="mt-4 pt-4 border-t border-blue-100 text-[10px] text-blue-500 text-center leading-relaxed">
+                ⚠️ <strong class="text-blue-700">1 akun = 1 device</strong> · Akun baru harus diaktifkan oleh admin
+            </div>
+        </div>
+    </div>
+
+    <div id="dashboard" class="max-w-7xl mx-auto hidden">
+        <header class="mb-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-bold">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-900">Metapro - Profesional Market Analys</span>
+                        <span class="text-blue-400 font-semibold text-lg">v1.0</span>
+                        <span class="text-gray-400 font-normal text-lg">· XAUUSD</span>
+                    </h1>
+                    <p class="text-sm text-gray-500 mt-1">
+                        © BOOM TRADE INDONESIA
+                        <span id="userDisplay" class="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-mono ml-1 border border-blue-200"></span>
+                    </p>
+                    <p class="text-xs text-gray-400 mt-0.5">Intraday Trade · Fundamental Analys</p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div id="countdownDisplay" class="text-xs font-mono bg-blue-50 px-3 py-2 rounded-lg text-blue-600 border border-blue-200 font-semibold">Auto: 15:00</div>
+                    <button id="adminBtn" onclick="openAdminPanel()" style="display:none" class="admin-badge text-xs font-semibold px-3 py-2 rounded-lg transition">🔧 Admin</button>
+                    <button id="fetchBtn" onclick="loadSignals()" class="btn-primary font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                        <span id="btnText">Refresh</span>
+                        <span id="btnSpinner" class="spinner hidden"></span>
+                    </button>
+                    <button onclick="logout()" class="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-semibold px-4 py-2 rounded-lg text-sm transition">⎋ Keluar</button>
+                </div>
+            </div>
+            <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                <span id="statusMsg" class="text-blue-600 font-medium"></span>
+                <span id="tradeDayBadge" class="lock-badge text-[10px] font-bold px-2 py-1 rounded font-mono hidden">Intraday Trade</span>
+            </div>
+        </header>
+
+        <div class="mb-4 flex flex-wrap items-center gap-2">
+            <span class="text-xs text-gray-500 uppercase tracking-wider font-semibold">Filter:</span>
+            <button onclick="setFilter('all')" id="filter-all" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-sm transition">Semua</button>
+            <button onclick="setFilter('swing')" id="filter-swing" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition">D1</button>
+            <button onclick="setFilter('h4')" id="filter-h4" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition">H4</button>
+            <button onclick="setFilter('h1')" id="filter-h1" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition">H1</button>
+            <button onclick="setFilter('fundamental')" id="filter-fundamental" class="filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-white text-blue-600 border border-blue-200 hover:bg-blue-50 transition">Fundamental</button>
+        </div>
+
+        <div id="resultsGrid" class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4"></div>
+        <div id="tradeHistorySection" class="mb-6"></div>
+        <div id="fundamentalSection" class="w-full mt-6 hidden"></div>
+
+        <div id="emptyState" class="text-center py-20 text-gray-400 hidden">
+            <p class="text-lg mb-2">👋 Tidak ada data yang cocok dengan filter.</p>
+        </div>
+
+        <footer class="mt-8 text-xs text-gray-400 text-center max-w-3xl mx-auto">
+            <p>© 2026 Boom Trade Indonesia · Metapro v1.0</p>
+        </footer>
+    </div>
+
+    <div id="adminPanel" class="fixed inset-0 z-50 hidden items-start justify-center bg-blue-950/30 backdrop-blur-sm p-4 overflow-y-auto">
+        <div class="card p-5 md:p-6 w-full max-w-5xl my-6">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-blue-900">🔧 Admin Panel</h2>
+                    <p class="text-xs text-blue-500 mt-1">Kelola akun pengguna (device-based)</p>
+                </div>
+                <button onclick="closeAdminPanel()" class="text-blue-400 hover:text-blue-700 text-2xl leading-none w-9 h-9 rounded-lg hover:bg-blue-50">×</button>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-4 text-xs text-blue-700">
+                ℹ️ Device fingerprint: <span class="font-mono text-blue-900 font-semibold" id="adminFingerprint">-</span><br>
+                <span class="text-blue-400 text-[10px]">Akun hanya bisa dilihat & dikelola dari device yang sama.</span>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div class="bg-blue-50 rounded-xl p-3 border border-blue-200"><div class="text-[10px] text-blue-600 uppercase font-semibold">Total</div><div class="text-2xl font-bold text-blue-800" id="statTotal">0</div></div>
+                <div class="bg-amber-50 rounded-xl p-3 border border-amber-200"><div class="text-[10px] text-amber-600 uppercase font-semibold">Pending</div><div class="text-2xl font-bold text-amber-600" id="statPending">0</div></div>
+                <div class="bg-green-50 rounded-xl p-3 border border-green-200"><div class="text-[10px] text-green-600 uppercase font-semibold">Aktif</div><div class="text-2xl font-bold text-green-600" id="statActive">0</div></div>
+                <div class="bg-red-50 rounded-xl p-3 border border-red-200"><div class="text-[10px] text-red-600 uppercase font-semibold">Ditangguhkan</div><div class="text-2xl font-bold text-red-600" id="statSuspended">0</div></div>
+            </div>
+            <div class="flex gap-2 mb-4 flex-wrap">
+                <button onclick="refreshAdminPanel()" class="btn-primary text-xs font-semibold px-3 py-2 rounded-lg">🔄 Refresh</button>
+                <button onclick="adminResetTodayStatus()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2 rounded-lg">♻️ Reset Today (Semua TF)</button>
+                <button onclick="adminUnlockTodayTrade()" class="bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold px-3 py-2 rounded-lg">🔓 Unlock Today (Semua TF)</button>
+                <button onclick="clearTradeHistory()" class="bg-red-600 hover:bg-red-700 text-white text-xs font-semibold px-3 py-2 rounded-lg">📜 Clear History (Semua TF)</button>
+            </div>
+            <div class="bg-white rounded-xl border border-blue-100 shadow-sm table-scroll">
+                <table class="w-full text-xs min-w-[640px]">
+                    <thead class="bg-blue-50 text-blue-700">
+                        <tr>
+                            <th class="text-left p-3 font-semibold">Username</th>
+                            <th class="text-left p-3 font-semibold">Status</th>
+                            <th class="text-left p-3 font-semibold">Device</th>
+                            <th class="text-left p-3 font-semibold">Terdaftar</th>
+                            <th class="text-center p-3 font-semibold">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTableBody" class="text-gray-700"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SHARED_API_KEY = '74f1be64bb3046969e8388293923fb34';
+        const ADMIN_USERNAME = 'admin';
+        const ADMIN_PASSWORD = 'metapro2026';
+
+        let licenseKey = '';
+        let isAdmin = false;
+        let deviceFingerprint = '';
+        let apiKey = SHARED_API_KEY;
+        let currentFilter = 'all';
+        let allResults = {};
+        let fundamentalResult = null;
+
+        const REFRESH_INTERVAL = 15 * 60 * 1000;
+        let refreshCountdown = REFRESH_INTERVAL;
+        let countdownInterval = null;
+        let nextEventTimerInterval = null;
+        let isFetching = false;
+
+        const PIP_SIZE = 0.1;
+        const ATR_CONFIG = {
+            swing: { slAtr: 0.8, tp1Atr: 1.0, tp2Atr: 1.2, tp3Atr: 1.5 },
+            h4:    { slAtr: 0.8, tp1Atr: 1.0, tp2Atr: 1.2, tp3Atr: 1.5 },
+            h1:    { slAtr: 0.8, tp1Atr: 1.0, tp2Atr: 1.2, tp3Atr: 1.5 },
+        };
+        const TIMEFRAMES = [
+            { interval: '1day', label: 'D1', type: 'swing', outputsize: 300, minCandles: 60 },
+            { interval: '4h',   label: 'H4', type: 'h4',    outputsize: 300, minCandles: 60 },
+            { interval: '1h',   label: 'H1', type: 'h1',    outputsize: 300, minCandles: 60 },
+        ];
+
+        const US_COUNTRY_CODES = new Set(['US', 'USD', 'USA', 'UNITED STATES', 'UNITED_STATES', 'UNITEDSTATES', 'AMERICA']);
+        const CALENDAR_API = 'https://biquote.io/api/calendar';
+        let calendarCache = { data: null, timestamp: 0, endpoint: null };
+        const CALENDAR_CACHE_TTL = 5 * 60 * 1000;
+
+        const HISTORY_MAX_DAYS = 14;
+        const HISTORY_STORE_MAX = 90;
+
+        function getHistoryKey(interval) { return 'xauusd_trade_history_v1_' + interval; }
+
+        function getTodayKey() {
+            const now = new Date();
+            return now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        }
+
+        function migrateOldHistory() {
+            try {
+                const oldRaw = localStorage.getItem('xauusd_trade_history_v1');
+                if (oldRaw) {
+                    const newKey = getHistoryKey('1day');
+                    if (!localStorage.getItem(newKey)) localStorage.setItem(newKey, oldRaw);
+                    localStorage.removeItem('xauusd_trade_history_v1');
+                }
+            } catch(e) {}
+        }
+
+        function getTradeHistory(interval) {
+            try {
+                const raw = localStorage.getItem(getHistoryKey(interval));
+                if (!raw) return [];
+                const arr = JSON.parse(raw);
+                return Array.isArray(arr) ? arr : [];
+            } catch(e) { return []; }
+        }
+
+        function saveTradeHistory(interval, history) {
+            try {
+                const trimmed = history.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, HISTORY_STORE_MAX);
+                localStorage.setItem(getHistoryKey(interval), JSON.stringify(trimmed));
+            } catch(e) {}
+        }
+
+        function getTodayTrade(interval) {
+            const history = getTradeHistory(interval);
+            const today = getTodayKey();
+            return history.find(t => t.date === today) || null;
+        }
+
+        function upsertTodayTrade(interval, trade) {
+            const history = getTradeHistory(interval);
+            const today = getTodayKey();
+            const idx = history.findIndex(t => t.date === today);
+            if (idx >= 0) history[idx] = { ...history[idx], ...trade, date: today };
+            else history.push({ ...trade, date: today, createdAt: Date.now() });
+            saveTradeHistory(interval, history);
+        }
+
+        function deleteTodayTrade(interval) {
+            const history = getTradeHistory(interval);
+            const today = getTodayKey();
+            saveTradeHistory(interval, history.filter(t => t.date !== today));
+        }
+
+        function clearAllHistory() {
+            try { TIMEFRAMES.forEach(tf => localStorage.removeItem(getHistoryKey(tf.interval))); } catch(e) {}
+        }
+
+        function finalizeOldTrades(interval) {
+            const history = getTradeHistory(interval);
+            const today = getTodayKey();
+            let changed = false;
+            history.forEach(t => {
+                if (t.date < today && !t.finalized) {
+                    if (!t.status || t.status === 'ACTIVE') t.status = 'EXPIRED';
+                    t.finalized = true;
+                    t.finalizedAt = Date.now();
+                    changed = true;
+                }
+            });
+            if (changed) saveTradeHistory(interval, history);
+        }
+
+        function updateTodayTrade(interval, price) {
+            const trade = getTodayTrade(interval);
+            if (!trade) return;
+            const isBuy = (trade.signal || '').includes('BUY');
+            const isSell = (trade.signal || '').includes('SELL');
+            if (!isBuy && !isSell) return;
+            if (trade.finalized) return;
+            if (trade.entry == null) return;
+            if (trade.highSeen == null || !isFinite(trade.highSeen)) trade.highSeen = trade.entry;
+            if (trade.lowSeen == null || !isFinite(trade.lowSeen)) trade.lowSeen = trade.entry;
+
+            const oldStatus = trade.status || 'ACTIVE';
+            let needsReset = false;
+            if (isBuy) {
+                if ((oldStatus === 'TP1_HIT' || oldStatus === 'TP2_HIT' || oldStatus === 'TP3_HIT') && trade.highSeen < trade.tp1) needsReset = true;
+                if (oldStatus === 'SL_HIT' && trade.lowSeen > trade.sl) needsReset = true;
+            } else {
+                if ((oldStatus === 'TP1_HIT' || oldStatus === 'TP2_HIT' || oldStatus === 'TP3_HIT') && trade.lowSeen > trade.tp1) needsReset = true;
+                if (oldStatus === 'SL_HIT' && trade.highSeen < trade.sl) needsReset = true;
+            }
+            if (needsReset) {
+                trade.highSeen = trade.entry; trade.lowSeen = trade.entry;
+                trade.status = 'ACTIVE'; trade.hitLevel = null; trade.pnlR = 0;
+            }
+
+            if (isFinite(price) && price > 0) {
+                trade.highSeen = Math.max(trade.highSeen, price);
+                trade.lowSeen = Math.min(trade.lowSeen, price);
+            }
+
+            let status = 'ACTIVE', hitLevel = null, pnlR = 0;
+            if (isBuy) {
+                if (trade.highSeen >= trade.tp3) { status = 'TP3_HIT'; hitLevel = 'TP3'; pnlR = 1.07; }
+                else if (trade.highSeen >= trade.tp2) { status = 'TP2_HIT'; hitLevel = 'TP2'; pnlR = 0.69; }
+                else if (trade.highSeen >= trade.tp1) { status = 'TP1_HIT'; hitLevel = 'TP1'; pnlR = 0.32; }
+                else if (trade.lowSeen <= trade.sl) { status = 'SL_HIT'; hitLevel = 'SL'; pnlR = -1; }
+            } else {
+                if (trade.lowSeen <= trade.tp3) { status = 'TP3_HIT'; hitLevel = 'TP3'; pnlR = 1.07; }
+                else if (trade.lowSeen <= trade.tp2) { status = 'TP2_HIT'; hitLevel = 'TP2'; pnlR = 0.69; }
+                else if (trade.lowSeen <= trade.tp1) { status = 'TP1_HIT'; hitLevel = 'TP1'; pnlR = 0.32; }
+                else if (trade.highSeen >= trade.sl) { status = 'SL_HIT'; hitLevel = 'SL'; pnlR = -1; }
+            }
+
+            trade.status = status; trade.hitLevel = hitLevel; trade.pnlR = pnlR;
+            trade.lastCheckPrice = price; trade.lastCheckAt = Date.now();
+            upsertTodayTrade(interval, trade);
+        }
+
+        function getStatusBadgeClass(status) {
+            switch (status) {
+                case 'TP1_HIT': case 'TP2_HIT': case 'TP3_HIT': return 'status-tp';
+                case 'SL_HIT': return 'status-sl';
+                case 'EXPIRED': return 'status-expired';
+                default: return 'status-active';
+            }
+        }
+        function getStatusLabel(status) {
+            switch (status) {
+                case 'TP1_HIT': return '✅ TP1 HIT';
+                case 'TP2_HIT': return '✅✅ TP2 HIT';
+                case 'TP3_HIT': return '🏆 TP3 HIT';
+                case 'SL_HIT': return '❌ SL HIT';
+                case 'EXPIRED': return '⏱️ EXPIRED';
+                default: return '⏳ ACTIVE';
+            }
+        }
+        function getAccountStatusBadge(status) {
+            switch (status) {
+                case 'active': return '<span class="status-tp text-[10px] font-bold px-2 py-0.5 rounded">AKTIF</span>';
+                case 'pending': return '<span class="status-pending text-[10px] font-bold px-2 py-0.5 rounded">PENDING</span>';
+                case 'suspended': return '<span class="status-suspended text-[10px] font-bold px-2 py-0.5 rounded">SUSPENDED</span>';
+                default: return '<span class="status-expired text-[10px] font-bold px-2 py-0.5 rounded">UNKNOWN</span>';
+            }
+        }
+
+        function num(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
+        function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+
+        function parseEventDate(raw) {
+            if (raw === null || raw === undefined) return null;
+            if (typeof raw === 'number' || /^\d+$/.test(String(raw))) { let n = Number(raw); if (n < 10000000000) n *= 1000; const d = new Date(n); return isNaN(d.getTime()) ? null : d; }
+            const s = String(raw).trim(); if (!s) return null;
+            let d = new Date(s); if (!isNaN(d.getTime())) return d;
+            d = new Date(s.replace(' ', 'T')); if (!isNaN(d.getTime())) return d;
+            const m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})\s+(\d{1,2}):(\d{2})/);
+            if (m) { d = new Date(Number(m[3]), Number(m[2])-1, Number(m[1]), Number(m[4]), Number(m[5])); if (!isNaN(d.getTime())) return d; }
+            return null;
+        }
+        async function fetchWithTimeout(url, timeoutMs) {
+            const c = new AbortController(); const t = setTimeout(() => c.abort(), timeoutMs);
+            try { const r = await fetch(url, { signal: c.signal }); clearTimeout(t); return r; } catch (e) { clearTimeout(t); throw e; }
+        }
+        async function fetchEconomicCalendar() {
+            const now = Date.now();
+            if (calendarCache.data && (now - calendarCache.timestamp) < CALENDAR_CACHE_TTL) return calendarCache.data;
+            const url = `${CALENDAR_API}?countries=US&importance=high&limit=1000`;
+            try {
+                const res = await fetchWithTimeout(url, 20000);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!Array.isArray(data)) throw new Error('Bukan array');
+                calendarCache = { data, timestamp: Date.now(), endpoint: 'filtered-api' };
+                return data;
+            } catch (e) { return []; }
+        }
+
+        async function computeFingerprint() {
+            const parts = [
+                screen.width + 'x' + screen.height + 'x' + (screen.colorDepth || 24),
+                screen.availWidth + 'x' + screen.availHeight,
+                Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+                (navigator.language || 'en').split('-')[0],
+                navigator.platform || 'unknown',
+                String(navigator.hardwareConcurrency || 0),
+                String(navigator.deviceMemory || 0),
+                String(navigator.maxTouchPoints || 0),
+                window.devicePixelRatio ? window.devicePixelRatio.toFixed(2) : '1',
+            ];
+            const raw = parts.join('|');
+            try {
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+                return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24);
+            } catch (e) {
+                let h = 0;
+                for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+                return 'fb' + Math.abs(h).toString(16).padStart(22, '0');
+            }
+        }
+
+        const SESSION_KEY = 'metapro_active_session_v1';
+        const STORE_PREFIX = 'xauusd_';
+
+        function openIDB() {
+            return new Promise((resolve) => {
+                try {
+                    const req = indexedDB.open('xauusd_db', 1);
+                    req.onupgradeneeded = () => { try { req.result.createObjectStore('kv'); } catch(e){} };
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                } catch (e) { resolve(null); }
+            });
+        }
+        async function idbSet(key, value) {
+            const db = await openIDB(); if (!db) return;
+            try { await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(value, key); tx.oncomplete = res; tx.onerror = rej; }); } catch (e) {}
+        }
+        async function idbGet(key) {
+            const db = await openIDB(); if (!db) return null;
+            try { return await new Promise((res, rej) => { const tx = db.transaction('kv', 'readonly'); const req = tx.objectStore('kv').get(key); req.onsuccess = () => res(req.result); req.onerror = rej; }); } catch (e) { return null; }
+        }
+        async function lockSet(key, value) {
+            const data = JSON.stringify(value); const fullKey = STORE_PREFIX + key;
+            try { localStorage.setItem(fullKey, data); } catch (e) {}
+            try { sessionStorage.setItem(fullKey, data); } catch (e) {}
+            try { const exp = new Date(Date.now() + 10*365*24*60*60*1000).toUTCString(); document.cookie = `${fullKey}=${encodeURIComponent(data)}; expires=${exp}; path=/; SameSite=Lax`; } catch (e) {}
+            try { await idbSet(fullKey, data); } catch (e) {}
+        }
+        async function lockGet(key) {
+            const fullKey = STORE_PREFIX + key;
+            try { const v = localStorage.getItem(fullKey); if (v) return JSON.parse(v); } catch (e) {}
+            try { const v = sessionStorage.getItem(fullKey); if (v) return JSON.parse(v); } catch (e) {}
+            try { const m = document.cookie.match(new RegExp('(^|;\\s*)' + fullKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)')); if (m) return JSON.parse(decodeURIComponent(m[2])); } catch (e) {}
+            try { const v = await idbGet(fullKey); if (v) return JSON.parse(v); } catch (e) {}
+            return null;
+        }
+        async function lockDelete(key) {
+            const fullKey = STORE_PREFIX + key;
+            try { localStorage.removeItem(fullKey); } catch (e) {}
+            try { sessionStorage.removeItem(fullKey); } catch (e) {}
+            try { document.cookie = `${fullKey}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`; } catch (e) {}
+            try { const db = await openIDB(); if (db) await new Promise((res) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').delete(fullKey); tx.oncomplete = res; tx.onerror = res; }); } catch (e) {}
+        }
+
+        const ACCOUNTS_KEY = 'metapro_accounts_v1';
+        function getAccounts() {
+            try { const raw = localStorage.getItem(ACCOUNTS_KEY); return raw ? JSON.parse(raw) : {}; } catch (e) { return {}; }
+        }
+        function saveAccounts(accounts) {
+            try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts)); } catch (e) {}
+        }
+        async function hashPassword(password, salt) {
+            const raw = salt + '::' + password + '::metapro-salt-2026';
+            try {
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+                return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+            } catch (e) {
+                let h = 0;
+                for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+                return 'h' + Math.abs(h).toString(16);
+            }
+        }
+
+        function showAuthError(msg) { document.getElementById('authError').textContent = msg; document.getElementById('authSuccess').textContent = ''; }
+        function showAuthSuccess(msg) { document.getElementById('authSuccess').textContent = msg; document.getElementById('authError').textContent = ''; }
+        function showLoginForm() {
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('tabLogin').className = 'flex-1 py-2 rounded-lg text-sm font-semibold bg-white text-blue-700 shadow-sm transition';
+            document.getElementById('tabRegister').className = 'flex-1 py-2 rounded-lg text-sm font-semibold text-blue-400 transition';
+            document.getElementById('authError').textContent = '';
+            document.getElementById('authSuccess').textContent = '';
+        }
+        function showRegisterForm() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            document.getElementById('tabRegister').className = 'flex-1 py-2 rounded-lg text-sm font-semibold bg-white text-blue-700 shadow-sm transition';
+            document.getElementById('tabLogin').className = 'flex-1 py-2 rounded-lg text-sm font-semibold text-blue-400 transition';
+            document.getElementById('authError').textContent = '';
+            document.getElementById('authSuccess').textContent = '';
+        }
+
+        async function doRegister() {
+            const username = document.getElementById('regUsername').value.trim();
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regPasswordConfirm').value;
+            if (!username || !password) { showAuthError('⚠️ Semua field wajib diisi.'); return; }
+            if (password.length < 6) { showAuthError('⚠️ Password minimal 6 karakter.'); return; }
+            if (password !== confirm) { showAuthError('⚠️ Password tidak cocok.'); return; }
+            if (username.toLowerCase() === ADMIN_USERNAME) { showAuthError('❌ Username tidak dapat digunakan.'); return; }
+            if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) { showAuthError('⚠️ Username 3-20 karakter (huruf, angka, underscore).'); return; }
+            const accounts = getAccounts();
+            if (accounts[username]) { showAuthError('❌ Username sudah terdaftar.'); return; }
+            showAuthSuccess('⏳ Membuat akun...');
+            const fp = await computeFingerprint();
+            const hash = await hashPassword(password, username);
+            accounts[username] = { username, passwordHash: hash, status: 'pending', fingerprint: fp, createdAt: Date.now(), activatedAt: null };
+            saveAccounts(accounts);
+            showAuthSuccess('✅ Registrasi berhasil! Menunggu aktivasi admin.');
+            document.getElementById('regUsername').value = '';
+            document.getElementById('regPassword').value = '';
+            document.getElementById('regPasswordConfirm').value = '';
+            setTimeout(() => showLoginForm(), 3000);
+        }
+
+        async function doLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            if (!username || !password) { showAuthError('⚠️ Username & password wajib diisi.'); return; }
+            if (username === ADMIN_USERNAME) {
+                if (password !== ADMIN_PASSWORD) { showAuthError('❌ Password admin salah.'); return; }
+                licenseKey = 'ADMIN'; isAdmin = true;
+                await lockSet(SESSION_KEY, { username: 'ADMIN', isAdmin: true, at: Date.now() });
+                showDashboard(); loadSignals(); startAutoRefresh(); return;
+            }
+            const accounts = getAccounts();
+            const account = accounts[username];
+            if (!account) { showAuthError('❌ Username tidak ditemukan.'); return; }
+            const hash = await hashPassword(password, username);
+            if (account.passwordHash !== hash) { showAuthError('❌ Password salah.'); return; }
+            if (account.status === 'pending') { showAuthError('⏳ Akun menunggu aktivasi admin.'); return; }
+            if (account.status === 'suspended') { showAuthError('🚫 Akun Anda ditangguhkan.'); return; }
+            const fp = await computeFingerprint();
+            if (account.fingerprint && account.fingerprint !== fp) { showAuthError('❌ Akun ini terikat ke device lain.'); return; }
+            if (!account.fingerprint) { account.fingerprint = fp; accounts[username] = account; saveAccounts(accounts); }
+            licenseKey = username; isAdmin = false;
+            await lockSet(SESSION_KEY, { username, fingerprint: fp, at: Date.now() });
+            showDashboard(); loadSignals(); startAutoRefresh();
+        }
+
+        async function logout() {
+            if (!confirm('Keluar dari sesi ini?')) return;
+            licenseKey = ''; isAdmin = false;
+            await lockDelete(SESSION_KEY);
+            allResults = {}; fundamentalResult = null;
+            calendarCache = { data: null, timestamp: 0, endpoint: null };
+            stopAutoRefresh();
+            if (nextEventTimerInterval) clearInterval(nextEventTimerInterval);
+            document.getElementById('resultsGrid').innerHTML = '';
+            document.getElementById('fundamentalSection').innerHTML = '';
+            document.getElementById('tradeHistorySection').innerHTML = '';
+            document.getElementById('emptyState').classList.add('hidden');
+            document.getElementById('statusMsg').textContent = '';
+            document.getElementById('tradeDayBadge').classList.add('hidden');
+            document.getElementById('adminBtn').style.display = 'none';
+            closeAdminPanel(); showLogin();
+        }
+
+        function showDashboard() {
+            document.getElementById('authOverlay').classList.add('hidden');
+            document.getElementById('authOverlay').classList.remove('flex');
+            document.getElementById('dashboard').classList.remove('hidden');
+            const el = document.getElementById('userDisplay');
+            if (el) el.textContent = licenseKey ? `👤 ${licenseKey}${isAdmin ? ' ⚡' : ''}` : '';
+            document.getElementById('adminBtn').style.display = isAdmin ? 'inline-block' : 'none';
+        }
+        function showLogin() {
+            document.getElementById('authOverlay').classList.remove('hidden');
+            document.getElementById('authOverlay').classList.add('flex');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('loginUsername').value = '';
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('regUsername').value = '';
+            document.getElementById('regPassword').value = '';
+            document.getElementById('regPasswordConfirm').value = '';
+            document.getElementById('authError').textContent = '';
+            document.getElementById('authSuccess').textContent = '';
+            showLoginForm();
+            setTimeout(() => document.getElementById('loginUsername').focus(), 100);
+        }
+
+        function openAdminPanel() {
+            if (!isAdmin) return;
+            document.getElementById('adminPanel').classList.remove('hidden');
+            document.getElementById('adminPanel').classList.add('flex');
+            refreshAdminPanel();
+        }
+        function closeAdminPanel() {
+            document.getElementById('adminPanel').classList.add('hidden');
+            document.getElementById('adminPanel').classList.remove('flex');
+        }
+        async function refreshAdminPanel() {
+            const fpEl = document.getElementById('adminFingerprint');
+            const tbody = document.getElementById('accountsTableBody');
+            fpEl.textContent = deviceFingerprint || (await computeFingerprint());
+            const accounts = getAccounts();
+            const list = Object.values(accounts).sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+            document.getElementById('statTotal').textContent = list.length;
+            document.getElementById('statPending').textContent = list.filter(a => a.status === 'pending').length;
+            document.getElementById('statActive').textContent = list.filter(a => a.status === 'active').length;
+            document.getElementById('statSuspended').textContent = list.filter(a => a.status === 'suspended').length;
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-6 text-gray-400">Belum ada akun terdaftar</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(a => {
+                const fp = a.fingerprint ? `<span class="font-mono text-[9px] text-gray-500">${a.fingerprint.slice(0,10)}…</span>` : '<span class="text-amber-600 text-[10px] font-semibold">unbound</span>';
+                const dateStr = a.createdAt ? new Date(a.createdAt).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '-';
+                const safeName = a.username.replace(/'/g, "\\'");
+                let actions = '';
+                if (a.status === 'pending') actions += `<button onclick="adminActivate('${safeName}')" class="bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold px-2 py-1 rounded mr-1">Aktivasi</button>`;
+                if (a.status === 'active') actions += `<button onclick="adminSuspend('${safeName}')" class="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold px-2 py-1 rounded mr-1">Suspend</button>`;
+                if (a.status === 'suspended') actions += `<button onclick="adminActivate('${safeName}')" class="bg-green-600 hover:bg-green-700 text-white text-[10px] font-semibold px-2 py-1 rounded mr-1">Aktifkan</button>`;
+                if (a.fingerprint) actions += `<button onclick="adminResetDevice('${safeName}')" class="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-semibold px-2 py-1 rounded mr-1">Reset Device</button>`;
+                actions += `<button onclick="adminDelete('${safeName}')" class="bg-red-600 hover:bg-red-700 text-white text-[10px] font-semibold px-2 py-1 rounded">Hapus</button>`;
+                return `<tr class="border-t border-blue-50 hover:bg-blue-50/40">
+                    <td class="p-3 font-semibold text-blue-900">${a.username}</td>
+                    <td class="p-3">${getAccountStatusBadge(a.status)}</td>
+                    <td class="p-3">${fp}</td>
+                    <td class="p-3 text-[10px] text-gray-500">${dateStr}</td>
+                    <td class="p-3 text-center whitespace-nowrap">${actions}</td>
+                </tr>`;
+            }).join('');
+        }
+        function adminActivate(username) {
+            const accounts = getAccounts();
+            if (!accounts[username]) return;
+            accounts[username].status = 'active';
+            accounts[username].activatedAt = Date.now();
+            saveAccounts(accounts);
+            refreshAdminPanel();
+        }
+        function adminSuspend(username) {
+            const accounts = getAccounts();
+            if (!accounts[username]) return;
+            accounts[username].status = 'suspended';
+            saveAccounts(accounts);
+            refreshAdminPanel();
+        }
+        function adminResetDevice(username) {
+            if (!confirm(`Reset device binding untuk "${username}"?\n\nUser akan bisa login dari device baru saat login berikutnya.`)) return;
+            const accounts = getAccounts();
+            if (!accounts[username]) return;
+            accounts[username].fingerprint = null;
+            saveAccounts(accounts);
+            refreshAdminPanel();
+        }
+        function adminDelete(username) {
+            if (!confirm(`Hapus akun "${username}"? Tidak bisa dibatalkan.`)) return;
+            const accounts = getAccounts();
+            delete accounts[username];
+            saveAccounts(accounts);
+            refreshAdminPanel();
+        }
+        function adminUnlockTodayTrade() {
+            if (!confirm('⚠️ Unlock trade hari ini untuk SEMUA timeframe?')) return;
+            TIMEFRAMES.forEach(tf => deleteTodayTrade(tf.interval));
+            alert('✅ Trade hari ini (D1, H4, H1) di-unlock. Klik Refresh untuk generate ulang.');
+        }
+        function adminResetTodayStatus() {
+            if (!confirm('♻️ Reset status trade hari ini ke ACTIVE untuk SEMUA timeframe?')) return;
+            let count = 0;
+            TIMEFRAMES.forEach(tf => {
+                const trade = getTodayTrade(tf.interval);
+                if (!trade) return;
+                trade.highSeen = trade.entry; trade.lowSeen = trade.entry;
+                trade.status = 'ACTIVE'; trade.hitLevel = null; trade.pnlR = 0;
+                upsertTodayTrade(tf.interval, trade);
+                count++;
+            });
+            alert(count > 0 ? `✅ ${count} trade di-reset ke ACTIVE.` : 'Tidak ada trade hari ini.');
+            renderResults();
+        }
+        function clearTradeHistory() {
+            if (!confirm('⚠️ Hapus SEMUA history trade untuk D1, H4, H1?')) return;
+            clearAllHistory();
+            alert('✅ History dihapus.');
+            renderResults();
+        }
+
+        function startAutoRefresh() {
+            stopAutoRefresh();
+            refreshCountdown = REFRESH_INTERVAL;
+            updateCountdownDisplay();
+            countdownInterval = setInterval(() => {
+                refreshCountdown -= 1000;
+                if (refreshCountdown <= 0) { refreshCountdown = REFRESH_INTERVAL; updateCountdownDisplay(); if (apiKey) loadSignals(true); }
+                else updateCountdownDisplay();
+            }, 1000);
+        }
+        function stopAutoRefresh() { if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; } }
+        function resetCountdown() { refreshCountdown = REFRESH_INTERVAL; updateCountdownDisplay(); }
+        function updateCountdownDisplay() {
+            const el = document.getElementById('countdownDisplay');
+            if (!el) return;
+            const mins = Math.floor(refreshCountdown / 60000);
+            const secs = Math.floor((refreshCountdown % 60000) / 1000);
+            el.textContent = `Auto: ${mins}:${String(secs).padStart(2, '0')}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            ['twelvedata_api_key','boomtrade_license','boomtrade_active_session','boomtrade_used_licenses','boomtrade_device_id'].forEach(k => localStorage.removeItem(k));
+            migrateOldHistory();
+            updateFilterUI();
+            document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
+            document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+            document.getElementById('regUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('regPassword').focus(); });
+            document.getElementById('regPassword').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('regPasswordConfirm').focus(); });
+            document.getElementById('regPasswordConfirm').addEventListener('keydown', e => { if (e.key === 'Enter') doRegister(); });
+
+            const apiOk = SHARED_API_KEY && SHARED_API_KEY.length >= 20;
+            if (!apiOk) { showLogin(); showAuthError('⚠️ API key belum dikonfigurasi admin.'); return; }
+
+            const session = await lockGet(SESSION_KEY);
+            if (!session || !session.username) { showLogin(); return; }
+
+            if (session.isAdmin && session.username === 'ADMIN') {
+                licenseKey = 'ADMIN'; isAdmin = true;
+                showDashboard(); loadSignals(); startAutoRefresh(); return;
+            }
+            const accounts = getAccounts();
+            const account = accounts[session.username];
+            if (!account || account.status !== 'active') { await lockDelete(SESSION_KEY); showLogin(); return; }
+            const fp = await computeFingerprint();
+            if (account.fingerprint && account.fingerprint !== fp) { await lockDelete(SESSION_KEY); showLogin(); return; }
+            licenseKey = session.username; isAdmin = false;
+            showDashboard(); loadSignals(); startAutoRefresh();
+        });
+
+        function setFilter(type) { currentFilter = type; updateFilterUI(); renderResults(); }
+        function updateFilterUI() {
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+                btn.classList.add('bg-white', 'text-blue-600', 'border', 'border-blue-200');
+            });
+            const active = document.getElementById(`filter-${currentFilter}`);
+            if (active) { active.classList.remove('bg-white', 'text-blue-600', 'border', 'border-blue-200'); active.classList.add('bg-blue-600', 'text-white', 'shadow-sm'); }
+        }
+
+        // ============ FETCH & AGGREGATE ============
+        async function fetchTimeSeries(interval, outputsize) {
+            if (!apiKey) throw new Error('API key belum diset.');
+            const url = `https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=${interval}&outputsize=${outputsize}&apikey=${apiKey}`;
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const json = await res.json();
+            if (json.status === 'error') throw new Error(json.message || 'API error');
+            if (!json.values || json.values.length === 0) throw new Error('Tidak ada data.');
+            return json.values.slice().reverse().map(v => ({
+                time: new Date(v.datetime).getTime(),
+                open: num(v.open), high: num(v.high), low: num(v.low), close: num(v.close), volume: num(v.volume),
+            }));
+        }
+
+        // Aggregate candle 1h → 4h (kalau API menolak 4h)
+        function aggregateTo4H(h1Candles) {
+            if (!h1Candles || h1Candles.length === 0) return [];
+            const buckets = new Map();
+            for (const c of h1Candles) {
+                const d = new Date(c.time);
+                const bucketHour = Math.floor(d.getUTCHours() / 4) * 4;
+                const bucketTime = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), bucketHour);
+                if (!buckets.has(bucketTime)) {
+                    buckets.set(bucketTime, { time: bucketTime, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume });
+                } else {
+                    const b = buckets.get(bucketTime);
+                    b.high = Math.max(b.high, c.high);
+                    b.low = Math.min(b.low, c.low);
+                    b.close = c.close;
+                    b.volume += c.volume;
+                }
+            }
+            return Array.from(buckets.values()).sort((a, b) => a.time - b.time);
+        }
+
+        function computeEMA(values, period) {
+            const r = new Array(values.length).fill(null);
+            if (values.length < period) return r;
+            let sum = 0; for (let i = 0; i < period; i++) sum += values[i];
+            let prev = sum / period; r[period-1] = prev;
+            const mult = 2 / (period + 1);
+            for (let i = period; i < values.length; i++) { prev = ((values[i]-prev)*mult)+prev; r[i] = prev; }
+            return r;
+        }
+        function computeRSI(v, p = 14) {
+            const r = new Array(v.length).fill(null);
+            if (v.length <= p) return r;
+            let g = 0, l = 0;
+            for (let i = 1; i <= p; i++) { const c = v[i]-v[i-1]; if (c >= 0) g += c; else l += Math.abs(c); }
+            let ag = g/p, al = l/p;
+            r[p] = al === 0 ? 100 : 100 - (100/(1+(ag/al)));
+            for (let i = p+1; i < v.length; i++) {
+                const c = v[i]-v[i-1];
+                ag = ((ag*(p-1))+(c>0?c:0))/p;
+                al = ((al*(p-1))+(c<0?Math.abs(c):0))/p;
+                r[i] = al === 0 ? 100 : 100 - (100/(1+(ag/al)));
+            }
+            return r;
+        }
+        function computeATR(c, p = 14) {
+            const r = new Array(c.length).fill(null);
+            if (c.length <= p) return r;
+            const tr = new Array(c.length).fill(null);
+            for (let i = 0; i < c.length; i++) {
+                if (i === 0) { tr[i] = c[i].high - c[i].low; continue; }
+                tr[i] = Math.max(c[i].high-c[i].low, Math.abs(c[i].high-c[i-1].close), Math.abs(c[i].low-c[i-1].close));
+            }
+            let sum = 0; for (let i = 1; i <= p; i++) sum += tr[i];
+            let atr = sum/p; r[p] = atr;
+            for (let i = p+1; i < c.length; i++) { atr = ((atr*(p-1))+tr[i])/p; r[i] = atr; }
+            return r;
+        }
+        function computeMACD(v, fast = 12, slow = 26, sigP = 9) {
+            const fE = computeEMA(v, fast), sE = computeEMA(v, slow);
+            const m = new Array(v.length).fill(null);
+            const comp = [];
+            for (let i = 0; i < v.length; i++) { if (fE[i] !== null && sE[i] !== null) { m[i] = fE[i]-sE[i]; comp.push(m[i]); } }
+            const sc = computeEMA(comp, sigP);
+            const sl = new Array(v.length).fill(null);
+            let ci = 0;
+            for (let i = 0; i < v.length; i++) { if (m[i] !== null) { if (sc[ci] !== null) sl[i] = sc[ci]; ci++; } }
+            return { macd: m, signal: sl };
+        }
+
+        function computeEntryLevels(price, dir, mode, candles) {
+            const atrCfg = ATR_CONFIG[mode];
+            if (!atrCfg || (!dir.includes('BUY') && !dir.includes('SELL'))) {
+                return { entry: null, stopLoss: null, tp1: null, tp2: null, tp3: null, pips: null, atr: null, rr: null };
+            }
+            const entry = price;
+            const atrArr = computeATR(candles, 14);
+            const atr = atrArr[atrArr.length - 1] || (entry * 0.015);
+            const slDist = atr * atrCfg.slAtr;
+            const t1Dist = atr * atrCfg.tp1Atr;
+            const t2Dist = atr * atrCfg.tp2Atr;
+            const t3Dist = atr * atrCfg.tp3Atr;
+            let stopLoss, tp1, tp2, tp3;
+            if (dir.includes('BUY')) { stopLoss = entry - slDist; tp1 = entry + t1Dist; tp2 = entry + t2Dist; tp3 = entry + t3Dist; }
+            else { stopLoss = entry + slDist; tp1 = entry - t1Dist; tp2 = entry - t2Dist; tp3 = entry - t3Dist; }
+            const pips = { sl: Math.round(slDist/PIP_SIZE), tp1: Math.round(t1Dist/PIP_SIZE), tp2: Math.round(t2Dist/PIP_SIZE), tp3: Math.round(t3Dist/PIP_SIZE) };
+            const rr = { tp1: t1Dist/slDist, tp2: t2Dist/slDist, tp3: t3Dist/slDist };
+            return { entry, stopLoss, tp1, tp2, tp3, pips, atr, slDist, t1Dist, t2Dist, t3Dist, rr };
+        }
+
+        function analyzeCandles(candles, tf) {
+            const mode = tf.type;
+            const interval = tf.interval;
+            const closes = candles.map(c => c.close);
+            const price = closes[closes.length-1];
+            const last = closes.length-1;
+
+            const todayTrade = getTodayTrade(interval);
+            if (todayTrade && todayTrade.signal && todayTrade.signal !== 'WAIT') {
+                const atrArr = computeATR(candles, 14);
+                const atr = todayTrade.atr || atrArr[atrArr.length-1] || (price * 0.015);
+                return {
+                    mode: 'INTRADAY (' + tf.label + ')',
+                    price, signal: todayTrade.signal, score: todayTrade.score || 70,
+                    candle_count: candles.length,
+                    ema20: todayTrade.ema20 || 0, ema50: todayTrade.ema50 || 0,
+                    rsi: todayTrade.rsi || 50, atr,
+                    macd: 0, macdSignal: 0,
+                    isLocked: true, lockedAt: todayTrade.createdAt,
+                    status: todayTrade.status || 'ACTIVE',
+                    levels: {
+                        entry: todayTrade.entry, stop_loss: todayTrade.sl,
+                        tp1: todayTrade.tp1, tp2: todayTrade.tp2, tp3: todayTrade.tp3,
+                        pips: todayTrade.pips || { sl:0, tp1:0, tp2:0, tp3:0 },
+                        rr: todayTrade.rr || { tp1:0, tp2:0, tp3:0 }
+                    }
+                };
+            }
+
+            const atrArr = computeATR(candles, 14);
+            const atr = atrArr[last] || (price * 0.015);
+            const ema20 = computeEMA(closes, Math.min(20, closes.length-1));
+            const ema50 = computeEMA(closes, Math.min(50, closes.length-1));
+            const e20 = ema20[last] || price, e50 = ema50[last] || price;
+            const rsi = computeRSI(closes, 14)[last] || 50;
+            const macd = computeMACD(closes, 12, 26, 9);
+            const mVal = macd.macd[last] || 0, sVal = macd.signal[last] || 0;
+
+            let conc = 0;
+            if (price > e20) conc++;
+            if (e20 > e50) conc++;
+            if (mVal > sVal) conc++;
+            if (rsi >= 55 || rsi <= 45) conc++;
+
+            const acc = clamp(Math.round(50 + conc*10.5), 50, 95);
+            let sig = 'WAIT';
+            if (conc >= 3 && price > e20) sig = 'STRONG BUY';
+            else if (conc >= 2 && price > e20) sig = 'BUY';
+            else if (conc >= 3 && price < e20) sig = 'STRONG SELL';
+            else if (conc >= 2 && price < e20) sig = 'SELL';
+
+            const lv = computeEntryLevels(price, sig, mode, candles);
+
+            if (sig !== 'WAIT' && lv.entry !== null) {
+                upsertTodayTrade(interval, {
+                    signal: sig, score: acc,
+                    entry: lv.entry, sl: lv.stopLoss,
+                    tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3,
+                    atr: lv.atr, pips: lv.pips, rr: lv.rr,
+                    ema20: e20, ema50: e50, rsi: rsi,
+                    status: 'ACTIVE', hitLevel: null, pnlR: 0,
+                    highSeen: lv.entry, lowSeen: lv.entry
+                });
+            }
+
+            return {
+                mode: 'INTRADAY (' + tf.label + ')', price, signal: sig, score: acc, candle_count: candles.length,
+                ema20: e20, ema50: e50, rsi, atr,
+                macd: mVal, macdSignal: sVal,
+                isLocked: false, status: 'ACTIVE',
+                levels: { entry: lv.entry, stop_loss: lv.stopLoss, tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3, pips: lv.pips, rr: lv.rr }
+            };
+        }
+
+        function isUSEvent(e) { const c = String(e.countryCode || e.country || '').toUpperCase().trim(); return US_COUNTRY_CODES.has(c); }
+        function isHighImpact(e) { const imp = String(e.importance || e.impact || '').toLowerCase().trim(); return imp === 'high' || imp === '3' || imp === 'red'; }
+        function isTargetFundamentalNews(name) { return true; }
+        function getCategory(name) {
+            const t = (name || '').toLowerCase();
+            if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) return 'NFP';
+            if (t.includes('cpi') || t.includes('consumer price')) return 'CPI';
+            if (t.includes('ppi') || t.includes('producer price')) return 'PPI';
+            if (t.includes('fomc') || t.includes('federal funds') || t.includes('fed funds')) return 'FOMC';
+            return 'Economic Data';
+        }
+        function classifyPre(title, forecast, previous) {
+            if (forecast == null || previous == null) return 'NEUTRAL';
+            const f = parseFloat(String(forecast).replace('%','').replace('K','000').replace('M','000000'));
+            const p = parseFloat(String(previous).replace('%','').replace('K','000').replace('M','000000'));
+            if (isNaN(f) || isNaN(p)) return 'NEUTRAL';
+            const t = title.toLowerCase();
+            if (t.includes('unemployment')) { if (f > p) return 'BUY'; if (f < p) return 'SELL'; }
+            else if (t.includes('cpi') || t.includes('ppi') || t.includes('consumer price') || t.includes('producer price')) { if (f > p) return 'SELL'; if (f < p) return 'BUY'; }
+            else if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) { if (f > p) return 'SELL'; if (f < p) return 'BUY'; }
+            else if (t.includes('rate decision') || t.includes('interest rate') || t.includes('fomc') || t.includes('federal funds') || t.includes('fed funds')) { if (f > p) return 'SELL'; if (f < p) return 'BUY'; }
+            if (f > p) return 'SELL';
+            if (f < p) return 'BUY';
+            return 'NEUTRAL';
+        }
+        function classifyRel(title, actual, forecast) {
+            if (actual == null || forecast == null) return 'NEUTRAL';
+            const a = parseFloat(String(actual).replace('%','').replace('K','000').replace('M','000000'));
+            const f = parseFloat(String(forecast).replace('%','').replace('K','000').replace('M','000000'));
+            if (isNaN(a) || isNaN(f)) return 'NEUTRAL';
+            const t = title.toLowerCase();
+            if (t.includes('cpi') || t.includes('ppi') || t.includes('consumer price') || t.includes('producer price')) { if (a > f) return 'SELL'; if (a < f) return 'BUY'; }
+            else if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) { if (a > f) return 'SELL'; if (a < f) return 'BUY'; }
+            else if (t.includes('rate decision') || t.includes('interest rate') || t.includes('fomc') || t.includes('federal funds') || t.includes('fed funds')) { if (a > f) return 'SELL'; if (a < f) return 'BUY'; }
+            if (a > f) return 'SELL';
+            if (a < f) return 'BUY';
+            return 'NEUTRAL';
+        }
+
+        function analyzeFundamental(events, currentPrice, atrValue) {
+            const now = new Date();
+            const debug = { total: events.length, usCount: 0, usHigh: 0, matched: 0, endpoint: calendarCache.endpoint };
+            const usOnly = events.filter(isUSEvent); debug.usCount = usOnly.length;
+            const usHigh = usOnly.filter(isHighImpact); debug.usHigh = usHigh.length;
+            const matched = usHigh.filter(e => isTargetFundamentalNews(e.name || '')); debug.matched = matched.length;
+            const upcoming = [], released = [];
+            for (const e of matched) {
+                const evDate = parseEventDate(e.time); if (!evDate) continue;
+                const item = {
+                    title: e.name || 'Event', impact: 'High',
+                    forecast: e.forecast != null && String(e.forecast).trim() !== '' ? String(e.forecast) : '-',
+                    previous: e.previous != null && String(e.previous).trim() !== '' ? String(e.previous) : '-',
+                    actual: e.actual != null && String(e.actual).trim() !== '' ? String(e.actual) : null,
+                    date: evDate, rawTime: e.time,
+                    timeStr: evDate.toLocaleString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) + ' WIB',
+                    category: getCategory(e.name || ''),
+                };
+                if (evDate > now) upcoming.push(item);
+                else if (e.actual != null && String(e.actual).trim() !== '') released.push(item);
+            }
+            upcoming.sort((a,b) => a.date - b.date);
+            released.sort((a,b) => b.date - a.date);
+            debug.upcomingTotal = upcoming.length;
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59, 999);
+            let upcomingThisMonth = upcoming.filter(u => u.date <= endOfMonth);
+            debug.upcomingThisMonth = upcomingThisMonth.length;
+            if (upcomingThisMonth.length === 0 && upcoming.length > 0) upcomingThisMonth = upcoming;
+
+            let buyScore = 0, sellScore = 0; const signals = [];
+            for (const r of released.slice(0,10)) {
+                const sent = classifyRel(r.title, r.actual, r.forecast);
+                if (sent === 'BUY') { buyScore += 2; signals.push({ ...r, sent: 'BUY' }); }
+                else if (sent === 'SELL') { sellScore += 2; signals.push({ ...r, sent: 'SELL' }); }
+                else signals.push({ ...r, sent: 'NEUTRAL' });
+            }
+            let fundamentalSignal = 'WAIT', confidence = 0;
+            if (buyScore > sellScore && buyScore >= 2) { fundamentalSignal = 'BUY'; confidence = Math.min(95, 50+buyScore*10); }
+            else if (sellScore > buyScore && sellScore >= 2) { fundamentalSignal = 'SELL'; confidence = Math.min(95, 50+sellScore*10); }
+
+            let preBuy = 0, preSell = 0; const upcomingWithPred = [];
+            for (const u of upcomingThisMonth) {
+                const canAnalyze = u.forecast !== '-' && u.previous !== '-';
+                const sent = canAnalyze ? classifyPre(u.title, u.forecast, u.previous) : 'NEUTRAL';
+                upcomingWithPred.push({ ...u, preSent: sent, canAnalyze });
+                if (sent === 'BUY') preBuy += 2; else if (sent === 'SELL') preSell += 2;
+            }
+            let preSignal = 'WAIT', preConf = 0;
+            if (preBuy > preSell && preBuy >= 2) { preSignal = 'BUY'; preConf = Math.min(95, 50+preBuy*10); }
+            else if (preSell > preBuy && preSell >= 2) { preSignal = 'SELL'; preConf = Math.min(95, 50+preSell*10); }
+
+            let effSignal = fundamentalSignal, effConf = confidence;
+            if (fundamentalSignal === 'WAIT' && preSignal !== 'WAIT') { effSignal = preSignal; effConf = preConf; }
+            else if (fundamentalSignal !== 'WAIT' && preSignal === fundamentalSignal) { effConf = Math.min(95, confidence+10); }
+
+            return { mode: 'FUNDAMENTAL', signal: fundamentalSignal, confidence, buyScore, sellScore, released: signals.slice(0,5), preSignal, preConfidence: preConf, upcoming: upcomingWithPred, effectiveSignal: effSignal, effectiveConfidence: effConf, debug };
+        }
+
+        // ============ LOAD SIGNALS with FALLBACK ============
+        async function loadSignals(fromAutoRefresh = false) {
+            if (!apiKey) { document.getElementById('statusMsg').textContent = '⚠️ API key belum diset.'; return; }
+            if (isFetching) return;
+            isFetching = true; resetCountdown(); setLoading(true);
+            if (nextEventTimerInterval) clearInterval(nextEventTimerInterval);
+            document.getElementById('statusMsg').textContent = fromAutoRefresh ? '🔄 Auto-refresh...' : 'Mengambil sinyal D1/H4/H1...';
+            allResults = {}; fundamentalResult = null;
+            let dailyCandles = null, dailyAtr = null;
+            let h1Cache = null, h1Error = null;
+
+            TIMEFRAMES.forEach(tf => finalizeOldTrades(tf.interval));
+
+            // Step 1: coba ambil 1h dulu (cache untuk fallback)
+            try {
+                document.getElementById('statusMsg').textContent = `Mengambil H1 (base)...`;
+                h1Cache = await fetchTimeSeries('1h', 900);
+            } catch (e) {
+                h1Error = e.message;
+                console.warn('[H1 base] gagal:', e.message);
+            }
+            await new Promise(r => setTimeout(r, 200));
+
+            // Step 2: loop semua TF
+            for (const tf of TIMEFRAMES) {
+                try {
+                    document.getElementById('statusMsg').textContent = `Mengambil ${tf.label}...`;
+                    let candles = null;
+                    let usedFallback = false;
+
+                    if (tf.interval === '1day') {
+                        candles = await fetchTimeSeries('1day', tf.outputsize);
+                    } else if (tf.interval === '4h') {
+                        try {
+                            candles = await fetchTimeSeries('4h', tf.outputsize);
+                        } catch (e) {
+                            if (h1Cache && h1Cache.length > 0) {
+                                candles = aggregateTo4H(h1Cache);
+                                usedFallback = true;
+                                console.warn('[H4] API gagal, pakai aggregate 1h:', e.message);
+                            } else {
+                                throw new Error('4h ditolak API & 1h tidak tersedia: ' + e.message);
+                            }
+                        }
+                    } else if (tf.interval === '1h') {
+                        if (h1Cache && h1Cache.length > 0) {
+                            candles = h1Cache;
+                        } else {
+                            throw new Error('1h tidak tersedia: ' + (h1Error || 'unknown'));
+                        }
+                    }
+
+                    if (!candles || candles.length < tf.minCandles) {
+                        throw new Error(`Candle ${tf.label} kurang (${candles ? candles.length : 0}).`);
+                    }
+
+                    const analysis = analyzeCandles(candles, tf);
+                    analysis.dataSource = usedFallback ? 'aggregate' : 'direct';
+                    allResults[tf.interval] = { tf, analysis, timestamp: new Date(candles[candles.length-1].time).toISOString(), usedFallback };
+                    if (tf.type === 'swing') { dailyCandles = candles; const atrArr = computeATR(candles, 14); dailyAtr = atrArr[atrArr.length-1]; }
+                } catch (err) {
+                    console.error(`[${tf.label}] GAGAL:`, err);
+                    allResults[tf.interval] = { tf, error: err.message };
+                }
+                await new Promise(r => setTimeout(r, 300));
+            }
+
+            // Step 3: update trade status per TF
+            TIMEFRAMES.forEach(tf => {
+                const res = allResults[tf.interval];
+                if (res && res.analysis && !res.error && isFinite(res.analysis.price)) {
+                    updateTodayTrade(tf.interval, res.analysis.price);
+                }
+            });
+
+            document.getElementById('statusMsg').textContent = 'Mengambil kalender...';
+            try {
+                const events = await fetchEconomicCalendar();
+                const price = dailyCandles ? dailyCandles[dailyCandles.length-1].close : null;
+                fundamentalResult = analyzeFundamental(events, price, dailyAtr);
+            } catch (err) { fundamentalResult = { mode: 'FUNDAMENTAL', error: err.message }; }
+
+            isFetching = false; setLoading(false);
+            const okCount = Object.values(allResults).filter(r => !r.error).length;
+            if (fundamentalResult && fundamentalResult.error) document.getElementById('statusMsg').textContent = `⚠️ Fundamental gagal · Signal ${okCount}/3 TF OK`;
+            else document.getElementById('statusMsg').textContent = `✅ Signal Siap · ${okCount}/3 TF · ${licenseKey}`;
+            renderResults();
+        }
+
+        function setLoading(isLoading) {
+            const btn = document.getElementById('fetchBtn'), spinner = document.getElementById('btnSpinner'), btnText = document.getElementById('btnText');
+            if (isLoading) { btn.classList.add('loading'); spinner.classList.remove('hidden'); btnText.textContent = 'Memuat...'; }
+            else { btn.classList.remove('loading'); spinner.classList.add('hidden'); btnText.textContent = 'Refresh'; }
+        }
+
+        function getBadgeClass(sig) {
+            switch (sig) {
+                case 'STRONG BUY': return 'badge-strong-buy'; case 'BUY': return 'badge-buy';
+                case 'STRONG SELL': return 'badge-strong-sell'; case 'SELL': return 'badge-sell';
+                default: return 'badge-wait';
+            }
+        }
+
+        function startNextEventCountdown(targetDateStr) {
+            if (nextEventTimerInterval) clearInterval(nextEventTimerInterval);
+            const el = document.getElementById('nextEventCountdown');
+            if (!el) return;
+            const targetTime = new Date(targetDateStr).getTime();
+            function update() {
+                const diff = targetTime - Date.now();
+                if (diff <= 0) { el.textContent = "Rilis"; el.classList.remove('text-blue-600','border-blue-300','bg-blue-50'); el.classList.add('text-red-600','border-red-300','bg-red-50'); clearInterval(nextEventTimerInterval); return; }
+                const days = Math.floor(diff / 86400000);
+                const hours = Math.floor((diff % 86400000) / 3600000);
+                const mins = Math.floor((diff % 3600000) / 60000);
+                const secs = Math.floor((diff % 60000) / 1000);
+                let str = ""; if (days > 0) str += `${days}d `;
+                str += `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+                el.textContent = str;
+            }
+            update(); nextEventTimerInterval = setInterval(update, 1000);
+        }
+
+        // ============ HISTORY CARD (SELALU TAMPIL) ============
+        function renderHistoryCard(tf, history) {
+            const sorted = history.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, HISTORY_MAX_DAYS);
+
+            let wins = 0, losses = 0, active = 0, totalR = 0;
+            sorted.forEach(t => {
+                if (t.status === 'TP1_HIT' || t.status === 'TP2_HIT' || t.status === 'TP3_HIT') { wins++; totalR += (t.pnlR || 0); }
+                else if (t.status === 'SL_HIT') { losses++; totalR += (t.pnlR || -1); }
+                else if (t.status === 'ACTIVE') { active++; }
+            });
+            const winRate = (wins + losses) > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
+
+            let contentHTML = '';
+
+            if (sorted.length === 0) {
+                contentHTML = `
+                    <div class="text-center py-8">
+                        <div class="text-3xl mb-2">📭</div>
+                        <div class="text-sm font-semibold text-gray-500">Belum ada history trade ${tf.label}</div>
+                        <div class="text-[10px] text-gray-400 mt-1">History akan muncul setelah ada sinyal & TP/SL tersentuh</div>
+                    </div>
+                `;
+            } else {
+                const rowsHTML = sorted.map(t => {
+                    const isBuy = (t.signal || '').includes('BUY');
+                    const sigCls = isBuy ? 'badge-buy' : (t.signal || '').includes('SELL') ? 'badge-sell' : 'badge-wait';
+                    const statusCls = getStatusBadgeClass(t.status);
+                    const statusLabel = getStatusLabel(t.status);
+                    const pnl = t.pnlR || 0;
+                    const pnlCls = pnl > 0 ? 'text-green-600' : pnl < 0 ? 'text-red-600' : 'text-gray-400';
+                    const pnlStr = pnl !== 0 ? `${pnl > 0 ? '+' : ''}${pnl.toFixed(2)}R` : '—';
+                    const dateObj = new Date(t.date + 'T00:00:00');
+                    const dateStr = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
+                    const dayStr = dateObj.toLocaleDateString('id-ID', { weekday: 'short' });
+                    const isToday = t.date === getTodayKey();
+                    const rowBg = isToday ? 'bg-blue-50' : '';
+                    return `
+                        <div class="grid grid-cols-12 gap-2 items-center px-3 py-2 border-t border-blue-50 hover:bg-blue-50/50 ${rowBg} text-xs">
+                            <div class="col-span-2 flex flex-col">
+                                <span class="font-bold text-blue-900 text-[11px]">${dateStr}</span>
+                                <span class="text-[9px] text-gray-400 uppercase">${dayStr}${isToday ? ' · now' : ''}</span>
+                            </div>
+                            <div class="col-span-2"><span class="${sigCls} text-[9px] font-bold px-1.5 py-0.5 rounded">${t.signal}</span></div>
+                            <div class="col-span-2 font-mono text-[10px] text-gray-700">${(t.entry || 0).toFixed(2)}</div>
+                            <div class="col-span-2 font-mono text-[10px] text-gray-500">SL ${(t.sl || 0).toFixed(2)}</div>
+                            <div class="col-span-3 text-center"><span class="${statusCls} text-[9px] font-bold px-2 py-0.5 rounded inline-block">${statusLabel}</span></div>
+                            <div class="col-span-1 text-right font-mono font-bold ${pnlCls} text-[11px]">${pnlStr}</div>
+                        </div>
+                    `;
+                }).join('');
+                contentHTML = `
+                    <div class="grid grid-cols-12 gap-2 px-3 py-2 bg-blue-50 text-[9px] uppercase tracking-wider text-blue-700 font-semibold">
+                        <div class="col-span-2">Date</div>
+                        <div class="col-span-2">Signal</div>
+                        <div class="col-span-2">Entry</div>
+                        <div class="col-span-2">SL</div>
+                        <div class="col-span-3 text-center">Status</div>
+                        <div class="col-span-1 text-right">PnL</div>
+                    </div>
+                    ${rowsHTML}
+                    <div class="px-3 py-2 border-t border-blue-100 text-[9px] text-gray-500 text-center bg-blue-50/50">
+                        Status di-recompute dari high/low sejak entry lock · PnL pakai tiered exit (50/30/20)
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="card overflow-hidden">
+                    <div class="p-3 md:p-4 border-b border-blue-100">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg">📜</span>
+                                <div>
+                                    <div class="text-sm font-bold text-blue-900">Trade History · ${tf.label}</div>
+                                    <div class="text-[10px] text-gray-500">${sorted.length} hari terakhir · device ini</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-3 text-[10px]">
+                                <div class="flex items-center gap-1"><span class="text-gray-500">Win:</span><span class="text-green-600 font-bold">${wins}</span></div>
+                                <div class="flex items-center gap-1"><span class="text-gray-500">Loss:</span><span class="text-red-600 font-bold">${losses}</span></div>
+                                <div class="flex items-center gap-1"><span class="text-gray-500">Active:</span><span class="text-blue-600 font-bold">${active}</span></div>
+                                <div class="flex items-center gap-1"><span class="text-gray-500">WR:</span><span class="font-bold ${winRate >= 50 ? 'text-green-600' : 'text-orange-500'}">${winRate}%</span></div>
+                                <div class="flex items-center gap-1"><span class="text-gray-500">Total:</span><span class="font-bold ${totalR >= 0 ? 'text-green-600' : 'text-red-600'} font-mono">${totalR > 0 ? '+' : ''}${totalR.toFixed(2)}R</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    ${contentHTML}
+                </div>
+            `;
+        }
+
+        function renderTradeHistory() {
+            const el = document.getElementById('tradeHistorySection');
+            if (!el) return;
+
+            let html = '';
+            TIMEFRAMES.forEach(tf => {
+                const history = getTradeHistory(tf.interval);
+                html += renderHistoryCard(tf, history);
+            });
+
+            el.classList.remove('hidden');
+            el.innerHTML = `<div class="space-y-4">${html}</div>`;
+        }
+
+        function renderResults() {
+            const grid = document.getElementById('resultsGrid');
+            const fundSection = document.getElementById('fundamentalSection');
+            const empty = document.getElementById('emptyState');
+
+            grid.innerHTML = '';
+            fundSection.innerHTML = '';
+
+            const showFund = (currentFilter === 'all' || currentFilter === 'fundamental');
+            const showTech = (currentFilter !== 'fundamental');
+            let hasTech = false, hasFund = false;
+
+            const badge = document.getElementById('tradeDayBadge');
+            const badgeParts = [];
+            TIMEFRAMES.forEach(tf => {
+                const t = getTodayTrade(tf.interval);
+                if (t && t.signal && t.signal !== 'WAIT') {
+                    badgeParts.push(`${tf.label}: ${t.signal} · ${getStatusLabel(t.status || 'ACTIVE')}`);
+                }
+            });
+            if (badgeParts.length) {
+                badge.classList.remove('hidden');
+                badge.textContent = `🔒 ${badgeParts.join('  |  ')}`;
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            if (showTech) {
+                const entries = Object.values(allResults).filter(r => currentFilter === 'all' || r.tf.type === currentFilter);
+                if (entries.length > 0) {
+                    hasTech = true;
+                    grid.classList.remove('hidden');
+                    entries.forEach(r => {
+                        const card = document.createElement('div'); card.className = 'card p-4';
+                        if (r.error) {
+                            card.innerHTML = `<div class="flex justify-between mb-2"><span class="font-bold text-blue-900">${r.tf.label}</span><span class="badge-wait text-xs px-2 py-0.5 rounded">Error</span></div><p class="text-xs text-red-500 break-words">${r.error}</p>`;
+                            grid.appendChild(card); return;
+                        }
+                        const a = r.analysis, L = a.levels, RR = L.rr || {};
+                        const sigBadge = getBadgeClass(a.signal);
+                        const accVal = a.score;
+                        const accColor = accVal >= 80 ? 'text-green-600' : accVal >= 70 ? 'text-yellow-600' : 'text-orange-500';
+                        const barColor = accVal >= 80 ? 'bg-green-500' : accVal >= 70 ? 'bg-yellow-500' : 'bg-orange-500';
+
+                        let fallbackTag = '';
+                        if (r.usedFallback) {
+                            fallbackTag = `<span class="text-[8px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-mono ml-1">agg 1h</span>`;
+                        }
+
+                        let lockBanner = '';
+                        if (a.isLocked && a.lockedAt) {
+                            const lockTime = new Date(a.lockedAt);
+                            const minutesAgo = Math.floor((Date.now() - a.lockedAt) / 60000);
+                            const timeAgo = minutesAgo < 60 ? `${minutesAgo}m lalu` : `${Math.floor(minutesAgo/60)}h ${minutesAgo%60}m lalu`;
+                            const statusCls = getStatusBadgeClass(a.status);
+                            const statusLabel = getStatusLabel(a.status);
+                            lockBanner = `
+                                <div class="bg-amber-50 border border-amber-300 rounded-lg p-2 mb-2 flex justify-between items-center">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-amber-600 text-sm">🔒</span>
+                                        <div>
+                                            <div class="text-[10px] text-amber-700 font-bold uppercase tracking-wider">${r.tf.label} Trade Locked</div>
+                                            <div class="text-[9px] text-amber-600/80">Tidak ada sinyal baru sampai besok</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right flex flex-col items-end gap-1">
+                                        <span class="${statusCls} text-[9px] font-bold px-1.5 py-0.5 rounded">${statusLabel}</span>
+                                        <div class="text-[8px] text-amber-600/70">${lockTime.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})} · ${timeAgo}</div>
+                                    </div>
+                                </div>`;
+                        }
+
+                        let levelsHTML = '';
+                        if (L.stop_loss !== null) {
+                            const risk = Math.abs(L.entry - L.stop_loss);
+                            const riskPct = (risk / L.entry * 100).toFixed(2);
+                            levelsHTML = `
+                            <div class="mt-2 bg-blue-50/50 rounded-lg p-2.5 border border-blue-100">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-[10px] uppercase text-blue-700 font-semibold">📍 Setup ${r.tf.label}</span>
+                                    <span class="text-[10px] font-mono text-yellow-600 font-semibold">Risk $${risk.toFixed(2)} (${riskPct}%)</span>
+                                </div>
+                                <div class="space-y-1.5 text-xs">
+                                    <div class="flex justify-between items-center bg-blue-100 border-l-2 border-blue-500 rounded px-2 py-1.5">
+                                        <span class="text-blue-700 text-[10px] uppercase font-semibold">Entry ${a.isLocked ? '<span class="text-[8px] text-amber-600">🔒 locked</span>' : ''}</span>
+                                        <span class="font-mono text-blue-800 font-bold text-sm">${L.entry.toFixed(2)}</span>
+                                    </div>
+                                    <div class="flex justify-between bg-red-50 border-l-2 border-red-500 rounded px-2 py-1.5">
+                                        <span class="text-gray-600 text-[10px] uppercase">SL (0.8×ATR)</span>
+                                        <span class="font-mono text-red-600 font-bold text-sm">${L.stop_loss.toFixed(2)}</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-1">
+                                        <div class="bg-green-50 border-l-2 border-green-500 rounded px-1.5 py-1.5">
+                                            <span class="text-gray-600 text-[9px] block">TP1 <span class="text-green-600">(1:${RR.tp1?.toFixed(2) || '-'})</span></span>
+                                            <span class="font-mono text-green-700 text-xs font-bold">${L.tp1.toFixed(2)}</span>
+                                            <span class="text-[8px] text-gray-500 block">0.5×ATR</span>
+                                        </div>
+                                        <div class="bg-green-50 border-l-2 border-green-500 rounded px-1.5 py-1.5">
+                                            <span class="text-gray-600 text-[9px] block">TP2 <span class="text-green-600">(1:${RR.tp2?.toFixed(2) || '-'})</span></span>
+                                            <span class="font-mono text-green-700 text-xs font-bold">${L.tp2.toFixed(2)}</span>
+                                            <span class="text-[8px] text-gray-500 block">1.0×ATR</span>
+                                        </div>
+                                        <div class="bg-green-50 border-l-2 border-green-500 rounded px-1.5 py-1.5">
+                                            <span class="text-gray-600 text-[9px] block">TP3 <span class="text-green-600">(1:${RR.tp3?.toFixed(2) || '-'})</span></span>
+                                            <span class="font-mono text-green-700 text-xs font-bold">${L.tp3.toFixed(2)}</span>
+                                            <span class="text-[8px] text-gray-500 block">1.5×ATR</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-3 pt-2.5 border-t border-blue-100">
+                                    <div class="flex items-center gap-1 mb-1.5">
+                                        <span class="text-[9px] text-amber-600">⏱️</span>
+                                        <span class="text-[9px] text-amber-600 uppercase tracking-wider font-bold">Same-Day Exit</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-1">
+                                        <div class="bg-green-50 border border-green-300 rounded px-1.5 py-1.5 text-center">
+                                            <div class="text-[8px] text-green-700 font-bold uppercase">TP1</div>
+                                            <div class="text-[10px] text-gray-800 font-bold mt-0.5">Close 50%</div>
+                                            <div class="text-[8px] text-gray-500 mt-0.5">SL → BE</div>
+                                        </div>
+                                        <div class="bg-green-50 border border-green-300 rounded px-1.5 py-1.5 text-center">
+                                            <div class="text-[8px] text-green-700 font-bold uppercase">TP2</div>
+                                            <div class="text-[10px] text-gray-800 font-bold mt-0.5">Close 30%</div>
+                                            <div class="text-[8px] text-gray-500 mt-0.5">Trailing</div>
+                                        </div>
+                                        <div class="bg-green-50 border border-green-300 rounded px-1.5 py-1.5 text-center">
+                                            <div class="text-[8px] text-green-700 font-bold uppercase">TP3</div>
+                                            <div class="text-[10px] text-gray-800 font-bold mt-0.5">Close 20%</div>
+                                            <div class="text-[8px] text-gray-500 mt-0.5">Full exit</div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-1.5 text-[8px] text-gray-500 text-center italic">⏰ Force close 23:59 WIB jika belum hit TP</div>
+                                </div>
+                                <div class="mt-2 flex justify-between items-center text-[9px] text-gray-500">
+                                    <span>EMA20: <span class="font-mono text-gray-700">${a.ema20 ? a.ema20.toFixed(2) : '-'}</span></span>
+                                    <span>EMA50: <span class="font-mono text-gray-700">${a.ema50 ? a.ema50.toFixed(2) : '-'}</span></span>
+                                    <span>ATR: <span class="font-mono text-blue-600">$${a.atr.toFixed(2)}</span></span>
+                                </div>
+                            </div>`;
+                        } else {
+                            levelsHTML = `<div class="mt-2 bg-blue-50/50 rounded-lg p-3 border border-blue-100 border-dashed"><p class="text-[11px] text-gray-500 text-center">WAIT — belum ada setup ${r.tf.label} hari ini</p></div>`;
+                        }
+
+                        card.innerHTML = `
+                            ${lockBanner}
+                            <div class="flex justify-between items-start mb-2">
+                                <div>
+                                    <span class="font-bold text-blue-900 text-lg">${r.tf.label}</span>${fallbackTag}
+                                    <span class="text-[10px] text-gray-500 ml-1 uppercase">Intraday</span>
+                                </div>
+                                <div class="flex flex-col items-end gap-1">
+                                    <span class="${sigBadge} text-xs font-bold px-2.5 py-1 rounded-md">${a.signal}</span>
+                                    <span class="text-[11px] font-mono font-bold ${accColor}">Akurasi: ${accVal}%</span>
+                                </div>
+                            </div>
+                            <div class="flex justify-between bg-blue-50 rounded px-2 py-1.5 mb-2">
+                                <span class="text-[10px] text-blue-600 uppercase font-semibold">Harga Saat Ini</span>
+                                <span class="font-mono text-blue-900 font-bold">${a.price.toFixed(2)}</span>
+                            </div>
+                            <div class="mb-3"><div class="accuracy-bar"><div class="accuracy-fill ${barColor}" style="width: ${accVal}%"></div></div></div>
+                            ${levelsHTML}`;
+                        grid.appendChild(card);
+                    });
+                } else {
+                    grid.classList.add('hidden');
+                }
+            } else {
+                grid.classList.add('hidden');
+            }
+
+            renderTradeHistory();
+
+            if (showFund && fundamentalResult) {
+                hasFund = true;
+                fundSection.classList.remove('hidden');
+                const f = fundamentalResult;
+                const card = document.createElement('div');
+                card.className = 'card p-4 md:p-6';
+                let nextEvent = null;
+
+                if (f.error) {
+                    card.innerHTML = `<div class="flex justify-between mb-2"><span class="font-bold text-blue-900 text-lg">📰 Fundamental</span><span class="badge-wait text-xs px-2 py-0.5 rounded">Error</span></div><p class="text-xs text-red-500 mb-2">${f.error}</p>`;
+                } else {
+                    const direction = f.effectiveSignal || 'WAIT';
+                    const directionColor = direction.includes('BUY') ? 'text-green-600' : direction.includes('SELL') ? 'text-red-600' : 'text-gray-500';
+                    nextEvent = f.upcoming && f.upcoming.length > 0 ? f.upcoming[0] : null;
+                    const formatDateShort = (d) => new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }).toUpperCase();
+                    const getUsdBias = (goldSent) => {
+                        if (goldSent === 'BUY') return { text: 'Bearish USD', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-300' };
+                        if (goldSent === 'SELL') return { text: 'Bullish USD', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-300' };
+                        return { text: 'Neutral USD', color: 'text-gray-500', bg: 'bg-gray-50', border: 'border-gray-300' };
+                    };
+                    let directionHTML = `
+                        <div class="border border-blue-300 rounded-xl p-4 bg-gradient-to-br from-blue-50 to-white relative overflow-hidden h-full flex flex-col justify-center">
+                            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-blue-400 to-blue-500"></div>
+                            <div class="flex items-center gap-1 mb-2"><span class="text-blue-600 text-xs">⭐</span><span class="text-[10px] font-bold text-blue-700 tracking-widest uppercase">ULTIMATE – PRIORITY</span></div>
+                            <div class="text-sm font-bold text-blue-900 mb-2">XAUUSD Direction Today</div>
+                            <div class="text-3xl font-black ${directionColor} mb-1">${direction}</div>
+                            <div class="text-[10px] text-gray-500 font-mono">Berdasarkan berita ekonomi AS</div>
+                        </div>`;
+                    let nextEventHTML = '';
+                    if (nextEvent) {
+                        const usdBias = getUsdBias(nextEvent.preSent);
+                        const goldSignalText = nextEvent.preSent === 'BUY' ? 'Buy' : nextEvent.preSent === 'SELL' ? 'Sell' : 'Wait';
+                        const goldSignalColor = nextEvent.preSent === 'BUY' ? 'text-green-600' : nextEvent.preSent === 'SELL' ? 'text-red-600' : 'text-gray-500';
+                        nextEventHTML = `
+                            <div class="bg-white rounded-xl p-4 border border-blue-200 shadow-sm h-full flex flex-col justify-between">
+                                <div>
+                                    <div class="flex justify-between items-center mb-3">
+                                        <span class="text-[10px] text-blue-600 uppercase tracking-wider font-semibold">next high-impact event</span>
+                                        <span id="nextEventCountdown" class="text-[10px] font-mono text-blue-600 border border-blue-300 px-2 py-0.5 rounded-full bg-blue-50">Loading...</span>
+                                    </div>
+                                    <h3 class="text-xl font-bold text-blue-900 mb-1 leading-tight">${nextEvent.title}</h3>
+                                    <p class="text-[11px] text-gray-500 mb-3">${nextEvent.timeStr}</p>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <div class="bg-blue-50 rounded-lg p-2 border border-blue-100"><div class="text-[9px] text-blue-600 uppercase mb-1 font-semibold">AI Bias</div><div class="text-sm font-bold ${usdBias.color}">${usdBias.text}</div></div>
+                                    <div class="bg-blue-50 rounded-lg p-2 border border-blue-100"><div class="text-[9px] text-blue-600 uppercase mb-1 font-semibold">XAUUSD Signal</div><div class="text-sm font-bold ${goldSignalColor}">${goldSignalText}</div></div>
+                                </div>
+                            </div>`;
+                    }
+                    let upcomingHTML = `<div class="text-xs text-blue-800 font-semibold mb-3 mt-4">Upcoming economic events</div><div class="grid grid-cols-1 md:grid-cols-2 gap-2">`;
+                    const eventsToShow = f.upcoming ? f.upcoming.slice(0, 4) : [];
+                    if (eventsToShow.length === 0) {
+                        upcomingHTML += `<div class="text-center text-xs text-gray-500 py-4 col-span-full">Tidak ada news dalam waktu dekat.</div>`;
+                    } else {
+                        for (const ev of eventsToShow) {
+                            const usdBias = getUsdBias(ev.preSent);
+                            const goldSignalText = ev.preSent === 'BUY' ? 'Buy' : ev.preSent === 'SELL' ? 'Sell' : 'Wait';
+                            const goldSignalColor = ev.preSent === 'BUY' ? 'text-green-600 border-green-300 bg-green-50' : ev.preSent === 'SELL' ? 'text-red-600 border-red-300 bg-red-50' : 'text-gray-500 border-gray-300 bg-gray-50';
+                            const borderLeft = ev.preSent === 'BUY' ? 'border-l-4 border-green-500' : ev.preSent === 'SELL' ? 'border-l-4 border-red-500' : 'border-l-4 border-blue-400';
+                            upcomingHTML += `
+                                <div class="bg-white ${borderLeft} rounded-r-lg p-3 border-y border-r border-blue-100 flex gap-3 items-center shadow-sm">
+                                    <div class="flex flex-col items-center justify-center min-w-[40px]">
+                                        <span class="text-lg font-bold text-blue-900 leading-none">${formatDateShort(ev.date).split(' ')[0]}</span>
+                                        <span class="text-[9px] text-blue-500 uppercase font-semibold">${formatDateShort(ev.date).split(' ')[1]}</span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-bold text-blue-900 mb-0.5">${ev.title}</div>
+                                        <div class="text-[10px] text-gray-500 mb-2">${ev.category ? ev.category : 'Economic Data'}</div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="text-[9px] font-bold px-2 py-0.5 rounded ${usdBias.bg} ${usdBias.color} border ${usdBias.border}">${ev.preSent === 'BUY' ? '▼' : '▲'} ${usdBias.text}</span>
+                                            <span class="text-[9px] font-bold px-2 py-0.5 rounded border ${goldSignalColor}">XAUUSD ${goldSignalText}</span>
+                                        </div>
+                                    </div>
+                                </div>`;
+                        }
+                    }
+                    upcomingHTML += `</div>`;
+                    const debugInfo = `<details class="mt-4 border-t border-blue-100 pt-2"><summary class="text-[9px] text-blue-400 cursor-pointer hover:text-blue-600 text-center">Lihat Detail Data & Diagnostik</summary><div class="mt-2 text-[9px] font-mono text-gray-500 bg-blue-50 p-2 rounded border border-blue-100 text-center">Total:${f.debug?.total||0} · US:${f.debug?.usCount||0} · High:${f.debug?.usHigh||0} · Match:${f.debug?.matched||0}</div></details>`;
+                    card.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-2">${directionHTML}${nextEventHTML}</div>${upcomingHTML}${debugInfo}`;
+                }
+                fundSection.appendChild(card);
+                if (nextEvent) startNextEventCountdown(nextEvent.date);
+                else if (nextEventTimerInterval) clearInterval(nextEventTimerInterval);
+            } else {
+                fundSection.classList.add('hidden');
+                if (nextEventTimerInterval) clearInterval(nextEventTimerInterval);
+            }
+
+            if (!hasTech && !hasFund) empty.classList.remove('hidden');
+            else empty.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
