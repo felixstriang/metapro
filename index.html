@@ -49,7 +49,7 @@
         .input-field:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
         .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-        /* ===== TOAST NOTIFICATION (fallback untuk APK/WebView) ===== */
+        /* ===== TOAST NOTIFICATION ===== */
         #toastContainer {
             position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
             z-index: 9999; display: flex; flex-direction: column; gap: 8px;
@@ -68,19 +68,12 @@
         .toast.toast-info { background: linear-gradient(135deg, #475569 0%, #64748b 100%); }
         .toast-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
         .toast-body { font-size: 11px; font-weight: 500; opacity: 0.95; }
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
-            to   { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes toastOut {
-            from { opacity: 1; transform: translateY(0) scale(1); }
-            to   { opacity: 0; transform: translateY(-16px) scale(0.95); }
-        }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes toastOut { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-16px) scale(0.95); } }
     </style>
 </head>
 <body class="min-h-screen p-3 md:p-6">
 
-    <!-- ===== TOAST CONTAINER ===== -->
     <div id="toastContainer"></div>
 
     <div id="authOverlay" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: radial-gradient(circle at 50% 0%, #dbeafe 0%, #f5f8fd 60%);">
@@ -141,7 +134,7 @@
                 <div>
                     <h1 class="text-2xl md:text-3xl font-bold">
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-900">Metapro - Profesional Market Analys</span>
-                        <span class="text-blue-400 font-semibold text-lg">v1.4</span>
+                        <span class="text-blue-400 font-semibold text-lg">v1.5</span>
                         <span class="text-gray-400 font-normal text-lg">· XAUUSD</span>
                     </h1>
                     <p class="text-sm text-gray-500 mt-1">
@@ -153,7 +146,7 @@
                 <div class="flex items-center gap-2 flex-wrap">
                     <div id="countdownDisplay" class="text-xs font-mono bg-blue-50 px-3 py-2 rounded-lg text-blue-600 border border-blue-200 font-semibold">Auto: 15:00</div>
                     <button id="adminBtn" onclick="openAdminPanel()" style="display:none" class="admin-badge text-xs font-semibold px-3 py-2 rounded-lg transition">🔧 Admin</button>
-                    <button id="notifBtn" onclick="toggleNotifications()" class="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-semibold px-3 py-2 rounded-lg text-sm transition" title="Aktifkan notifikasi">🔕</button>
+                    <button id="notifBtn" onclick="toggleNotifications()" class="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-semibold px-3 py-2 rounded-lg text-sm transition" title="Aktifkan notifikasi">🔔</button>
                     <button id="fetchBtn" onclick="loadSignals()" class="btn-primary font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                         <span id="btnText">Refresh</span>
                         <span id="btnSpinner" class="spinner hidden"></span>
@@ -238,6 +231,10 @@
         const ADMIN_USERNAME = 'admin';
         const ADMIN_PASSWORD = 'metapro2026';
 
+        // --- KONFIGURASI ONESIGNAL ---
+        const ONESIGNAL_APP_ID = 'eac7621c-5985-403c-9c1c-d8530b1a11ee';
+        const ONESIGNAL_REST_API_KEY = 'os_v2_app_5ldwehczqvadzha43bjqwgqr5ziujrokw6hex7vnflm6wftqiet5p65uh75dyyk3s27pehqacax5kejzzxh7ekfhw4rtc2od3djayki';
+
         let licenseKey = '';
         let isAdmin = false;
         let deviceFingerprint = '';
@@ -273,10 +270,43 @@
         const HISTORY_STORE_MAX = 90;
 
         // ============================================================
-        // 🔔 SISTEM NOTIFIKASI (Web + Toast + Vibrate)
+        // 🎵 SISTEM NOTIFIKASI (Web Audio + Vibrate + OneSignal)
         // ============================================================
         const NOTIF_SEEN_KEY = 'metapro_notif_seen_v1';
-        let lastNotifPermission = ('Notification' in window) ? Notification.permission : 'unsupported';
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+            }
+            if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
+        }
+
+        function playNotifSound(type) {
+            if (!audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                if (type === 'sl') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.5);
+                    gain.gain.setValueAtTime(1, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+                } else {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(1, audioCtx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                    osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+                }
+            } catch(e) {}
+        }
 
         function getNotifSeen() {
             try { return JSON.parse(localStorage.getItem(NOTIF_SEEN_KEY)) || {}; } catch(e) { return {}; }
@@ -293,56 +323,63 @@
         function isNotifSeen(tag) { return !!getNotifSeen()[tag]; }
         function markNotifSeen(tag) { const s = getNotifSeen(); s[tag] = Date.now(); saveNotifSeen(s); }
 
-        async function requestNotificationPermission() {
-            if (!('Notification' in window)) return false;
-            if (Notification.permission === 'granted') return true;
-            if (Notification.permission === 'denied') return false;
-            try {
-                const p = await Notification.requestPermission();
-                return p === 'granted';
-            } catch(e) { return false; }
-        }
-
-        // ---- In-App Toast (paling andal di APK/WebView) ----
+        // ---- In-App Toast ----
         function showToast(title, body, type = 'signal', duration = 7000) {
             const container = document.getElementById('toastContainer');
             if (!container) return;
+            
+            initAudio();
+            playNotifSound(type);
+
             const el = document.createElement('div');
             el.className = `toast toast-${type}`;
             el.innerHTML = `<div class="toast-title">${title}</div>${body ? `<div class="toast-body">${body}</div>` : ''}`;
             container.appendChild(el);
-            // Auto-dismiss
+            
             setTimeout(() => {
                 el.style.animation = 'toastOut 0.3s ease-in forwards';
                 setTimeout(() => { try { el.remove(); } catch(e){} }, 320);
             }, duration);
-            // Vibrasi berbeda per tipe
+            
             if (navigator.vibrate) {
                 try {
-                    if (type === 'sl') navigator.vibrate([220, 100, 220, 100, 220]);
-                    else if (type === 'tp') navigator.vibrate([120, 80, 120]);
-                    else navigator.vibrate([100, 60, 100]);
+                    if (type === 'sl') navigator.vibrate([500, 200, 500, 200, 500]);
+                    else if (type === 'tp') navigator.vibrate([300, 100, 300]);
+                    else navigator.vibrate([400, 200, 400]);
                 } catch(e) {}
             }
         }
 
-        // ---- System Notification (jika tersedia) ----
-        function trySystemNotification(title, body, tag) {
-            if (!('Notification' in window)) return false;
-            if (Notification.permission !== 'granted') return false;
+        // ---- KIRIM NOTIFIKASI KE ONESIGNAL (API LANGSUNG) ----
+        async function kirimNotifikasiOneSignal(judul, isiPesan) {
+            if (!licenseKey) return;
             try {
-                const n = new Notification(title, {
-                    body: body,
-                    tag: tag,
-                    icon: 'images/metapro2.png',
-                    badge: 'images/metapro2.png',
-                    requireInteraction: false,
-                    silent: false,
+                const response = await fetch('https://onesignal.com/api/v1/notifications', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        app_id: ONESIGNAL_APP_ID,
+                        target_channel: 'push',
+                        include_aliases: {
+                            external_id: [licenseKey]
+                        },
+                        headings: { en: judul },
+                        contents: { en: isiPesan },
+                        data: { targetUrl: 'https://felixstring.github.io/metapro/' }
+                    })
                 });
-                n.onclick = () => { try { window.focus(); n.close(); } catch(e){} };
-                setTimeout(() => { try { n.close(); } catch(e){} }, 15000);
-                return true;
-            } catch(e) { return false; }
+                if (!response.ok) {
+                    const err = await response.json();
+                    console.error('Gagal kirim notif OneSignal:', err);
+                } else {
+                    console.log('Notifikasi OneSignal berhasil dikirim.');
+                }
+            } catch (error) {
+                console.error('Error jaringan OneSignal:', error);
+            }
         }
 
         // ---- Notifikasi Terpadu ----
@@ -352,73 +389,45 @@
             markNotifSeen(tag);
             const title = `📢 SIGNAL ${sig} · ${tfLabel}`;
             const body  = `Entry ${entry.toFixed(2)} · SL ${sl.toFixed(2)} · TP1 ${tp1.toFixed(2)}`;
-            showToast(title, body, 'signal');
-            trySystemNotification(title, body, tag);
+            
+            showToast(title, body, 'signal'); // Tampil di dalam aplikasi
+            kirimNotifikasiOneSignal(title, body); // Tampil di bar HP
         }
+
         function notifyTPHit(tfLabel, interval, trade, level, pips) {
             const tag = `tp_${interval}_${trade.date}_${trade.signal}_${level}`;
             if (isNotifSeen(tag)) return;
             markNotifSeen(tag);
             const title = `🎯 ${level} HIT · ${tfLabel}`;
             const body  = `${trade.signal} · +${pips} pips · Entry ${trade.entry.toFixed(2)}`;
+            
             showToast(title, body, 'tp');
-            trySystemNotification(title, body, tag);
+            kirimNotifikasiOneSignal(title, body);
         }
+
         function notifySLHit(tfLabel, interval, trade, pips) {
             const tag = `sl_${interval}_${trade.date}_${trade.signal}`;
             if (isNotifSeen(tag)) return;
             markNotifSeen(tag);
             const title = `❌ SL HIT · ${tfLabel}`;
             const body  = `${trade.signal} · -${Math.abs(pips)} pips · Entry ${trade.entry.toFixed(2)}`;
+            
             showToast(title, body, 'sl');
-            trySystemNotification(title, body, tag);
+            kirimNotifikasiOneSignal(title, body);
         }
 
         function updateNotifButton() {
             const btn = document.getElementById('notifBtn');
             if (!btn) return;
-            if (!('Notification' in window)) {
-                // Tetap tampilkan tombol agar toast in-app bisa di-test manual
-                btn.style.display = 'inline-block';
-                btn.textContent = '🔔';
-                btn.title = 'Notifikasi in-app aktif (WebView tidak mendukung system notif)';
-                btn.className = 'font-semibold px-3 py-2 rounded-lg text-sm transition border bg-green-50 text-green-600 border-green-200';
-                return;
-            }
             btn.style.display = 'inline-block';
-            btn.className = 'font-semibold px-3 py-2 rounded-lg text-sm transition border';
-            if (Notification.permission === 'granted') {
-                btn.textContent = '🔔';
-                btn.title = 'Notifikasi aktif';
-                btn.classList.add('bg-green-50', 'text-green-600', 'border-green-200');
-            } else if (Notification.permission === 'denied') {
-                btn.textContent = '🔕';
-                btn.title = 'Notifikasi diblokir — aktifkan di pengaturan browser/HP';
-                btn.classList.add('bg-red-50', 'text-red-500', 'border-red-200');
-            } else {
-                btn.textContent = '🔕';
-                btn.title = 'Klik untuk aktifkan notifikasi';
-                btn.classList.add('bg-blue-50', 'text-blue-600', 'border-blue-200');
-            }
+            btn.className = 'font-semibold px-3 py-2 rounded-lg text-sm transition border bg-green-50 text-green-600 border-green-200';
+            btn.textContent = '🔔';
+            btn.title = 'Notifikasi HP Aktif (via OneSignal)';
         }
 
-        async function toggleNotifications() {
-            if (!('Notification' in window)) {
-                showToast('🔔 Notifikasi In-App Aktif', 'WebView tidak support system notification — notifikasi akan muncul sebagai popup di aplikasi.', 'info');
-                return;
-            }
-            if (Notification.permission === 'denied') {
-                alert('Notifikasi diblokir oleh sistem.\n\nBuka Pengaturan HP → Aplikasi → Metapro → Notifikasi → izinkan.');
-                return;
-            }
-            const ok = await requestNotificationPermission();
-            updateNotifButton();
-            if (ok) {
-                showToast('🔔 Notifikasi Aktif', 'Anda akan menerima notifikasi signal baru dan TP/SL hit.', 'info');
-                trySystemNotification('🔔 Notifikasi Aktif', 'Signal baru & TP/SL hit akan dikirim otomatis.', 'welcome_' + Date.now());
-            } else {
-                showToast('⚠️ Izin Ditolak', 'Notifikasi in-app tetap aktif di dalam aplikasi.', 'info');
-            }
+        function toggleNotifications() {
+            showToast('🔔 Notifikasi HP Aktif', 'Notifikasi Signal & TP/SL akan dikirim ke bar HP Anda.', 'info');
+            initAudio();
         }
 
         // Helper pips & label TF
@@ -433,7 +442,6 @@
                     default: return 0;
                 }
             }
-            // Fallback data lama tanpa field pips
             if (t.entry && t.sl && t.status === 'SL_HIT') {
                 return -Math.round(Math.abs(t.entry - t.sl) / PIP_SIZE);
             }
@@ -442,6 +450,51 @@
         function getTfLabel(interval) {
             const tf = TIMEFRAMES.find(x => x.interval === interval);
             return tf ? tf.label : String(interval).toUpperCase();
+        }
+
+        // ============================================================
+        // 🔑 DEVICE UUID
+        // ============================================================
+        const DEVICE_UUID_KEY = 'device_uuid_v2';
+        const FINGERPRINT_VERSION = 'v2_';
+
+        async function getOrCreateDeviceId() {
+            const existing = await lockGet(DEVICE_UUID_KEY);
+            if (existing && typeof existing === 'string' && existing.length >= 20) return existing;
+            let id;
+            try {
+                if (crypto.randomUUID) id = 'dev_' + crypto.randomUUID();
+                else {
+                    const arr = new Uint8Array(16);
+                    crypto.getRandomValues(arr);
+                    id = 'dev_' + Array.from(arr).map(b => b.toString(16).padStart(2,'0')).join('');
+                }
+            } catch(e) {
+                id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+            }
+            await lockSet(DEVICE_UUID_KEY, id);
+            return id;
+        }
+
+        async function computeFingerprint() {
+            const deviceId = await getOrCreateDeviceId();
+            const stableParts = [
+                deviceId,
+                Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+                (navigator.language || 'en').split('-')[0],
+                navigator.platform || 'unknown',
+                String(navigator.hardwareConcurrency || 0),
+            ];
+            const raw = FINGERPRINT_VERSION + stableParts.join('|');
+            try {
+                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+                const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+                return FINGERPRINT_VERSION + hex.slice(0, 40);
+            } catch(e) {
+                let h = 0;
+                for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
+                return FINGERPRINT_VERSION + Math.abs(h).toString(16).padStart(40, '0');
+            }
         }
 
         // ============================================================
@@ -547,7 +600,6 @@
             }
             trade.status = status; trade.hitLevel = hitLevel; trade.pnlR = pnlR;
 
-            // Hitung pips untuk PnL
             let pnlPips = 0;
             if (trade.pips) {
                 if (status === 'TP1_HIT') pnlPips = trade.pips.tp1 || 0;
@@ -557,7 +609,6 @@
             }
             trade.pnlPips = pnlPips;
 
-            // Notifikasi saat status berubah
             if (status !== oldStatus && (status === 'TP1_HIT' || status === 'TP2_HIT' || status === 'TP3_HIT' || status === 'SL_HIT')) {
                 const tfLabel = getTfLabel(interval);
                 if (status === 'SL_HIT') notifySLHit(tfLabel, interval, trade, pnlPips);
@@ -626,28 +677,6 @@
                 calendarCache = { data, timestamp: Date.now(), endpoint: 'filtered-api' };
                 return data;
             } catch(e) { return []; }
-        }
-        async function computeFingerprint() {
-            const parts = [
-                screen.width + 'x' + screen.height + 'x' + (screen.colorDepth || 24),
-                screen.availWidth + 'x' + screen.availHeight,
-                Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
-                (navigator.language || 'en').split('-')[0],
-                navigator.platform || 'unknown',
-                String(navigator.hardwareConcurrency || 0),
-                String(navigator.deviceMemory || 0),
-                String(navigator.maxTouchPoints || 0),
-                window.devicePixelRatio ? window.devicePixelRatio.toFixed(2) : '1',
-            ];
-            const raw = parts.join('|');
-            try {
-                const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-                return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0, 24);
-            } catch(e) {
-                let h = 0;
-                for (let i = 0; i < raw.length; i++) { h = ((h << 5) - h) + raw.charCodeAt(i); h |= 0; }
-                return 'fb' + Math.abs(h).toString(16).padStart(22, '0');
-            }
         }
 
         // ============================================================
@@ -829,6 +858,7 @@
                 showDashboard(); loadSignals(); startAutoRefresh(); return;
             }
 
+            initAudio();
             setAuthLoading('login', true);
             try {
                 const accounts = await getAccounts();
@@ -838,17 +868,31 @@
                 if (account.passwordHash !== hash) { showAuthError('❌ Password salah.'); return; }
                 if (account.status === 'pending') { showAuthError('⏳ Akun menunggu aktivasi admin.'); return; }
                 if (account.status === 'suspended') { showAuthError('🚫 Akun Anda ditangguhkan.'); return; }
+                
                 const fp = await computeFingerprint();
                 if (account.fingerprint && account.fingerprint !== fp) {
-                    showAuthError('❌ Akun ini terikat ke device lain. Hubungi admin untuk Reset Device.');
-                    return;
-                }
-                if (!account.fingerprint) {
+                    const isOldFormat = !account.fingerprint.startsWith(FINGERPRINT_VERSION);
+                    if (isOldFormat) {
+                        account.fingerprint = fp;
+                        try { await saveAccount(account); } catch(e) { console.warn('rebind failed:', e); }
+                    } else {
+                        showAuthError('❌ Akun ini terikat ke device lain. Hubungi admin.');
+                        return;
+                    }
+                } else if (!account.fingerprint) {
                     account.fingerprint = fp;
                     try { await saveAccount(account); } catch(e) { console.warn('fingerprint save failed:', e); }
                 }
+
                 licenseKey = username; isAdmin = false; deviceFingerprint = fp;
                 await lockSet(SESSION_KEY, { username, fingerprint: fp, at: Date.now() });
+
+                // Hubungkan HP dengan OneSignal
+                if (window.Median && window.Median.OneSignal) {
+                    window.Median.OneSignal.login(username);
+                    console.log("OneSignal: Terhubung dengan ID", username);
+                }
+
                 showDashboard(); loadSignals(); startAutoRefresh();
             } catch(e) {
                 console.error('Login error:', e);
@@ -860,6 +904,13 @@
 
         async function logout() {
             if (!confirm('Keluar dari sesi ini?')) return;
+            
+            // Putuskan koneksi OneSignal
+            if (window.Median && window.Median.OneSignal) {
+                window.Median.OneSignal.logout();
+                console.log("OneSignal: Berhasil logout.");
+            }
+
             licenseKey = ''; isAdmin = false;
             await lockDelete(SESSION_KEY);
             allResults = {}; fundamentalResult = null;
@@ -1059,8 +1110,22 @@
                 const account = accounts[session.username];
                 if (!account || account.status !== 'active') { await lockDelete(SESSION_KEY); showLogin(); return; }
                 const fp = await computeFingerprint();
-                if (account.fingerprint && account.fingerprint !== fp) { await lockDelete(SESSION_KEY); showLogin(); return; }
+                if (account.fingerprint && account.fingerprint !== fp) {
+                    const isOldFormat = !account.fingerprint.startsWith(FINGERPRINT_VERSION);
+                    if (isOldFormat) {
+                        account.fingerprint = fp;
+                        try { await saveAccount(account); } catch(e) { console.warn('session rebind failed:', e); }
+                    } else {
+                        await lockDelete(SESSION_KEY); showLogin(); return;
+                    }
+                }
                 licenseKey = session.username; isAdmin = false; deviceFingerprint = fp;
+                
+                // Hubungkan HP dengan OneSignal saat Session Restore
+                if (window.Median && window.Median.OneSignal) {
+                    window.Median.OneSignal.login(session.username);
+                }
+
                 showDashboard(); loadSignals(); startAutoRefresh();
             } catch(e) {
                 console.error('Session restore:', e);
@@ -1208,7 +1273,6 @@
                     status: 'ACTIVE', hitLevel: null, pnlR: 0, pnlPips: 0,
                     highSeen: lv.entry, lowSeen: lv.entry
                 });
-                // Notifikasi signal baru
                 notifySignal(tf.label, interval, sig, lv.entry, lv.stopLoss, lv.tp1);
             }
             return {
@@ -1314,11 +1378,11 @@
         async function loadSignals(fromAuto = false) {
             if (!apiKey) { document.getElementById('statusMsg').textContent = '⚠️ API key belum diset.'; return; }
             if (isFetching) return;
+            initAudio();
             isFetching = true; resetCountdown(); setLoading(true);
             if (nextEventTimerInterval) clearInterval(nextEventTimerInterval);
             document.getElementById('statusMsg').textContent = fromAuto ? '🔄 Auto-refresh...' : 'Mengambil sinyal D1/H4/H1...';
             allResults = {}; fundamentalResult = null;
-            let dailyCandles = null;
             let h1Cache = null, h1Error = null;
 
             TIMEFRAMES.forEach(tf => finalizeOldTrades(tf.interval));
@@ -1348,7 +1412,6 @@
                     const analysis = analyzeCandles(candles, tf);
                     analysis.dataSource = fb ? 'aggregate' : 'direct';
                     allResults[tf.interval] = { tf, analysis, timestamp: new Date(candles[candles.length-1].time).toISOString(), usedFallback: fb };
-                    if (tf.type === 'swing') dailyCandles = candles;
                 } catch(err) { allResults[tf.interval] = { tf, error: err.message }; }
                 await new Promise(r => setTimeout(r, 300));
             }
