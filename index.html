@@ -48,9 +48,40 @@
         .input-field { background: #f4f8ff; border: 1px solid #dbe6f7; transition: all 0.2s; }
         .input-field:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,0.12); }
         .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+        /* ===== TOAST NOTIFICATION (fallback untuk APK/WebView) ===== */
+        #toastContainer {
+            position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 8px;
+            width: 92vw; max-width: 400px; pointer-events: none;
+        }
+        .toast {
+            color: #fff; padding: 12px 16px; border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 13px; font-weight: 600; line-height: 1.35;
+            pointer-events: auto; animation: toastIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+            border-left: 4px solid rgba(255,255,255,0.5);
+        }
+        .toast.toast-signal { background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); }
+        .toast.toast-tp { background: linear-gradient(135deg, #059669 0%, #10b981 100%); }
+        .toast.toast-sl { background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); }
+        .toast.toast-info { background: linear-gradient(135deg, #475569 0%, #64748b 100%); }
+        .toast-title { font-size: 13px; font-weight: 800; margin-bottom: 2px; }
+        .toast-body { font-size: 11px; font-weight: 500; opacity: 0.95; }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(-20px) scale(0.95); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to   { opacity: 0; transform: translateY(-16px) scale(0.95); }
+        }
     </style>
 </head>
 <body class="min-h-screen p-3 md:p-6">
+
+    <!-- ===== TOAST CONTAINER ===== -->
+    <div id="toastContainer"></div>
 
     <div id="authOverlay" class="fixed inset-0 z-50 hidden items-center justify-center p-4" style="background: radial-gradient(circle at 50% 0%, #dbeafe 0%, #f5f8fd 60%);">
         <div class="card p-6 md:p-8 w-full max-w-md">
@@ -110,7 +141,7 @@
                 <div>
                     <h1 class="text-2xl md:text-3xl font-bold">
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-900">Metapro - Profesional Market Analys</span>
-                        <span class="text-blue-400 font-semibold text-lg">v1.1</span>
+                        <span class="text-blue-400 font-semibold text-lg">v1.4</span>
                         <span class="text-gray-400 font-normal text-lg">· XAUUSD</span>
                     </h1>
                     <p class="text-sm text-gray-500 mt-1">
@@ -122,6 +153,7 @@
                 <div class="flex items-center gap-2 flex-wrap">
                     <div id="countdownDisplay" class="text-xs font-mono bg-blue-50 px-3 py-2 rounded-lg text-blue-600 border border-blue-200 font-semibold">Auto: 15:00</div>
                     <button id="adminBtn" onclick="openAdminPanel()" style="display:none" class="admin-badge text-xs font-semibold px-3 py-2 rounded-lg transition">🔧 Admin</button>
+                    <button id="notifBtn" onclick="toggleNotifications()" class="bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 font-semibold px-3 py-2 rounded-lg text-sm transition" title="Aktifkan notifikasi">🔕</button>
                     <button id="fetchBtn" onclick="loadSignals()" class="btn-primary font-semibold px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                         <span id="btnText">Refresh</span>
                         <span id="btnSpinner" class="spinner hidden"></span>
@@ -149,7 +181,7 @@
             <p class="text-lg mb-2">👋 Tidak ada data yang cocok dengan filter.</p>
         </div>
         <footer class="mt-8 text-xs text-gray-400 text-center max-w-3xl mx-auto">
-            <p>© 2026 Boom Trade Indonesia · Metapro v1.1</p>
+            <p>© 2026 Boom Trade Indonesia · Metapro</p>
         </footer>
     </div>
 
@@ -199,8 +231,8 @@
         // ============================================================
         // ⚙️ KONFIGURASI
         // ============================================================
-        const SB_URL = 'https://exvjpyrafehlhclxgsxh.supabase.co';   // contoh: https://abcdefgh.supabase.co
-        const SB_KEY = 'sb_publishable_0_o8f1tvKKcwJwEXvWstDA_UAU7eJTn';      // anon public key (eyJ...)
+        const SB_URL = 'https://exvjpyrafehlhclxgsxh.supabase.co';
+        const SB_KEY = 'sb_publishable_0_o8f1tvKKcwJwEXvWstDA_UAU7eJTn';
 
         const SHARED_API_KEY = '74f1be64bb3046969e8388293923fb34';
         const ADMIN_USERNAME = 'admin';
@@ -240,6 +272,181 @@
         const HISTORY_MAX_DAYS = 14;
         const HISTORY_STORE_MAX = 90;
 
+        // ============================================================
+        // 🔔 SISTEM NOTIFIKASI (Web + Toast + Vibrate)
+        // ============================================================
+        const NOTIF_SEEN_KEY = 'metapro_notif_seen_v1';
+        let lastNotifPermission = ('Notification' in window) ? Notification.permission : 'unsupported';
+
+        function getNotifSeen() {
+            try { return JSON.parse(localStorage.getItem(NOTIF_SEEN_KEY)) || {}; } catch(e) { return {}; }
+        }
+        function saveNotifSeen(obj) {
+            try {
+                const keys = Object.keys(obj);
+                if (keys.length > 300) {
+                    keys.sort((a,b) => (obj[a]||0) - (obj[b]||0)).slice(0, keys.length - 300).forEach(k => delete obj[k]);
+                }
+                localStorage.setItem(NOTIF_SEEN_KEY, JSON.stringify(obj));
+            } catch(e) {}
+        }
+        function isNotifSeen(tag) { return !!getNotifSeen()[tag]; }
+        function markNotifSeen(tag) { const s = getNotifSeen(); s[tag] = Date.now(); saveNotifSeen(s); }
+
+        async function requestNotificationPermission() {
+            if (!('Notification' in window)) return false;
+            if (Notification.permission === 'granted') return true;
+            if (Notification.permission === 'denied') return false;
+            try {
+                const p = await Notification.requestPermission();
+                return p === 'granted';
+            } catch(e) { return false; }
+        }
+
+        // ---- In-App Toast (paling andal di APK/WebView) ----
+        function showToast(title, body, type = 'signal', duration = 7000) {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+            const el = document.createElement('div');
+            el.className = `toast toast-${type}`;
+            el.innerHTML = `<div class="toast-title">${title}</div>${body ? `<div class="toast-body">${body}</div>` : ''}`;
+            container.appendChild(el);
+            // Auto-dismiss
+            setTimeout(() => {
+                el.style.animation = 'toastOut 0.3s ease-in forwards';
+                setTimeout(() => { try { el.remove(); } catch(e){} }, 320);
+            }, duration);
+            // Vibrasi berbeda per tipe
+            if (navigator.vibrate) {
+                try {
+                    if (type === 'sl') navigator.vibrate([220, 100, 220, 100, 220]);
+                    else if (type === 'tp') navigator.vibrate([120, 80, 120]);
+                    else navigator.vibrate([100, 60, 100]);
+                } catch(e) {}
+            }
+        }
+
+        // ---- System Notification (jika tersedia) ----
+        function trySystemNotification(title, body, tag) {
+            if (!('Notification' in window)) return false;
+            if (Notification.permission !== 'granted') return false;
+            try {
+                const n = new Notification(title, {
+                    body: body,
+                    tag: tag,
+                    icon: 'images/metapro2.png',
+                    badge: 'images/metapro2.png',
+                    requireInteraction: false,
+                    silent: false,
+                });
+                n.onclick = () => { try { window.focus(); n.close(); } catch(e){} };
+                setTimeout(() => { try { n.close(); } catch(e){} }, 15000);
+                return true;
+            } catch(e) { return false; }
+        }
+
+        // ---- Notifikasi Terpadu ----
+        function notifySignal(tfLabel, interval, sig, entry, sl, tp1) {
+            const tag = `signal_${interval}_${getTodayKey()}_${sig}`;
+            if (isNotifSeen(tag)) return;
+            markNotifSeen(tag);
+            const title = `📢 SIGNAL ${sig} · ${tfLabel}`;
+            const body  = `Entry ${entry.toFixed(2)} · SL ${sl.toFixed(2)} · TP1 ${tp1.toFixed(2)}`;
+            showToast(title, body, 'signal');
+            trySystemNotification(title, body, tag);
+        }
+        function notifyTPHit(tfLabel, interval, trade, level, pips) {
+            const tag = `tp_${interval}_${trade.date}_${trade.signal}_${level}`;
+            if (isNotifSeen(tag)) return;
+            markNotifSeen(tag);
+            const title = `🎯 ${level} HIT · ${tfLabel}`;
+            const body  = `${trade.signal} · +${pips} pips · Entry ${trade.entry.toFixed(2)}`;
+            showToast(title, body, 'tp');
+            trySystemNotification(title, body, tag);
+        }
+        function notifySLHit(tfLabel, interval, trade, pips) {
+            const tag = `sl_${interval}_${trade.date}_${trade.signal}`;
+            if (isNotifSeen(tag)) return;
+            markNotifSeen(tag);
+            const title = `❌ SL HIT · ${tfLabel}`;
+            const body  = `${trade.signal} · -${Math.abs(pips)} pips · Entry ${trade.entry.toFixed(2)}`;
+            showToast(title, body, 'sl');
+            trySystemNotification(title, body, tag);
+        }
+
+        function updateNotifButton() {
+            const btn = document.getElementById('notifBtn');
+            if (!btn) return;
+            if (!('Notification' in window)) {
+                // Tetap tampilkan tombol agar toast in-app bisa di-test manual
+                btn.style.display = 'inline-block';
+                btn.textContent = '🔔';
+                btn.title = 'Notifikasi in-app aktif (WebView tidak mendukung system notif)';
+                btn.className = 'font-semibold px-3 py-2 rounded-lg text-sm transition border bg-green-50 text-green-600 border-green-200';
+                return;
+            }
+            btn.style.display = 'inline-block';
+            btn.className = 'font-semibold px-3 py-2 rounded-lg text-sm transition border';
+            if (Notification.permission === 'granted') {
+                btn.textContent = '🔔';
+                btn.title = 'Notifikasi aktif';
+                btn.classList.add('bg-green-50', 'text-green-600', 'border-green-200');
+            } else if (Notification.permission === 'denied') {
+                btn.textContent = '🔕';
+                btn.title = 'Notifikasi diblokir — aktifkan di pengaturan browser/HP';
+                btn.classList.add('bg-red-50', 'text-red-500', 'border-red-200');
+            } else {
+                btn.textContent = '🔕';
+                btn.title = 'Klik untuk aktifkan notifikasi';
+                btn.classList.add('bg-blue-50', 'text-blue-600', 'border-blue-200');
+            }
+        }
+
+        async function toggleNotifications() {
+            if (!('Notification' in window)) {
+                showToast('🔔 Notifikasi In-App Aktif', 'WebView tidak support system notification — notifikasi akan muncul sebagai popup di aplikasi.', 'info');
+                return;
+            }
+            if (Notification.permission === 'denied') {
+                alert('Notifikasi diblokir oleh sistem.\n\nBuka Pengaturan HP → Aplikasi → Metapro → Notifikasi → izinkan.');
+                return;
+            }
+            const ok = await requestNotificationPermission();
+            updateNotifButton();
+            if (ok) {
+                showToast('🔔 Notifikasi Aktif', 'Anda akan menerima notifikasi signal baru dan TP/SL hit.', 'info');
+                trySystemNotification('🔔 Notifikasi Aktif', 'Signal baru & TP/SL hit akan dikirim otomatis.', 'welcome_' + Date.now());
+            } else {
+                showToast('⚠️ Izin Ditolak', 'Notifikasi in-app tetap aktif di dalam aplikasi.', 'info');
+            }
+        }
+
+        // Helper pips & label TF
+        function getPnlPips(t) {
+            if (typeof t.pnlPips === 'number') return t.pnlPips;
+            if (t.pips) {
+                switch (t.status) {
+                    case 'TP1_HIT': return t.pips.tp1 || 0;
+                    case 'TP2_HIT': return t.pips.tp2 || 0;
+                    case 'TP3_HIT': return t.pips.tp3 || 0;
+                    case 'SL_HIT':   return -(t.pips.sl || 0);
+                    default: return 0;
+                }
+            }
+            // Fallback data lama tanpa field pips
+            if (t.entry && t.sl && t.status === 'SL_HIT') {
+                return -Math.round(Math.abs(t.entry - t.sl) / PIP_SIZE);
+            }
+            return 0;
+        }
+        function getTfLabel(interval) {
+            const tf = TIMEFRAMES.find(x => x.interval === interval);
+            return tf ? tf.label : String(interval).toUpperCase();
+        }
+
+        // ============================================================
+        // 📜 HISTORY TRADE
+        // ============================================================
         function getHistoryKey(interval) { return 'xauusd_trade_history_v1_' + interval; }
         function getTodayKey() {
             const now = new Date();
@@ -298,6 +505,7 @@
             });
             if (changed) saveTradeHistory(interval, history);
         }
+
         function updateTodayTrade(interval, price) {
             const trade = getTodayTrade(interval);
             if (!trade) return;
@@ -319,7 +527,7 @@
             }
             if (needsReset) {
                 trade.highSeen = trade.entry; trade.lowSeen = trade.entry;
-                trade.status = 'ACTIVE'; trade.hitLevel = null; trade.pnlR = 0;
+                trade.status = 'ACTIVE'; trade.hitLevel = null; trade.pnlR = 0; trade.pnlPips = 0;
             }
             if (isFinite(price) && price > 0) {
                 trade.highSeen = Math.max(trade.highSeen, price);
@@ -338,10 +546,31 @@
                 else if (trade.highSeen >= trade.sl) { status = 'SL_HIT'; hitLevel = 'SL'; pnlR = -1; }
             }
             trade.status = status; trade.hitLevel = hitLevel; trade.pnlR = pnlR;
+
+            // Hitung pips untuk PnL
+            let pnlPips = 0;
+            if (trade.pips) {
+                if (status === 'TP1_HIT') pnlPips = trade.pips.tp1 || 0;
+                else if (status === 'TP2_HIT') pnlPips = trade.pips.tp2 || 0;
+                else if (status === 'TP3_HIT') pnlPips = trade.pips.tp3 || 0;
+                else if (status === 'SL_HIT') pnlPips = -(trade.pips.sl || 0);
+            }
+            trade.pnlPips = pnlPips;
+
+            // Notifikasi saat status berubah
+            if (status !== oldStatus && (status === 'TP1_HIT' || status === 'TP2_HIT' || status === 'TP3_HIT' || status === 'SL_HIT')) {
+                const tfLabel = getTfLabel(interval);
+                if (status === 'SL_HIT') notifySLHit(tfLabel, interval, trade, pnlPips);
+                else notifyTPHit(tfLabel, interval, trade, status.replace('_HIT',''), pnlPips);
+            }
+
             trade.lastCheckPrice = price; trade.lastCheckAt = Date.now();
             upsertTodayTrade(interval, trade);
         }
 
+        // ============================================================
+        // 🎨 STATUS BADGE / LABEL / UTIL
+        // ============================================================
         function getStatusBadgeClass(status) {
             switch (status) {
                 case 'TP1_HIT': case 'TP2_HIT': case 'TP3_HIT': return 'status-tp';
@@ -655,6 +884,7 @@
             const el = document.getElementById('userDisplay');
             if (el) el.textContent = licenseKey ? `👤 ${licenseKey}${isAdmin ? ' ⚡' : ''}` : '';
             document.getElementById('adminBtn').style.display = isAdmin ? 'inline-block' : 'none';
+            updateNotifButton();
         }
         function showLogin() {
             document.getElementById('authOverlay').classList.remove('hidden');
@@ -764,7 +994,7 @@
             let c = 0;
             TIMEFRAMES.forEach(tf => {
                 const t = getTodayTrade(tf.interval); if (!t) return;
-                t.highSeen = t.entry; t.lowSeen = t.entry; t.status = 'ACTIVE'; t.hitLevel = null; t.pnlR = 0;
+                t.highSeen = t.entry; t.lowSeen = t.entry; t.status = 'ACTIVE'; t.hitLevel = null; t.pnlR = 0; t.pnlPips = 0;
                 upsertTodayTrade(tf.interval, t); c++;
             });
             alert(c > 0 ? `✅ ${c} trade di-reset.` : 'Tidak ada trade hari ini.');
@@ -801,6 +1031,8 @@
             ['twelvedata_api_key','boomtrade_license','boomtrade_active_session','boomtrade_used_licenses','boomtrade_device_id'].forEach(k => localStorage.removeItem(k));
             migrateOldHistory();
             updateFilterUI();
+            updateNotifButton();
+
             document.getElementById('loginUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
             document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
             document.getElementById('regUsername').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('regPassword').focus(); });
@@ -973,9 +1205,11 @@
                     tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3,
                     atr: lv.atr, pips: lv.pips, rr: lv.rr,
                     ema20: e20, ema50: e50, rsi,
-                    status: 'ACTIVE', hitLevel: null, pnlR: 0,
+                    status: 'ACTIVE', hitLevel: null, pnlR: 0, pnlPips: 0,
                     highSeen: lv.entry, lowSeen: lv.entry
                 });
+                // Notifikasi signal baru
+                notifySignal(tf.label, interval, sig, lv.entry, lv.stopLoss, lv.tp1);
             }
             return {
                 mode: 'INTRADAY ('+tf.label+')', price, signal: sig, score: acc, candle_count: candles.length,
@@ -1163,10 +1397,11 @@
         }
         function renderHistoryCard(tf, history) {
             const sorted = history.slice().sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, HISTORY_MAX_DAYS);
-            let wins = 0, losses = 0, active = 0, totalR = 0;
+            let wins = 0, losses = 0, active = 0, totalPips = 0;
             sorted.forEach(t => {
-                if (t.status === 'TP1_HIT' || t.status === 'TP2_HIT' || t.status === 'TP3_HIT') { wins++; totalR += (t.pnlR||0); }
-                else if (t.status === 'SL_HIT') { losses++; totalR += (t.pnlR || -1); }
+                const pp = getPnlPips(t);
+                if (t.status === 'TP1_HIT' || t.status === 'TP2_HIT' || t.status === 'TP3_HIT') { wins++; totalPips += pp; }
+                else if (t.status === 'SL_HIT') { losses++; totalPips += pp; }
                 else if (t.status === 'ACTIVE') active++;
             });
             const wr = (wins+losses) > 0 ? Math.round((wins/(wins+losses))*100) : 0;
@@ -1179,9 +1414,9 @@
                     const sigCls = isBuy ? 'badge-buy' : (t.signal||'').includes('SELL') ? 'badge-sell' : 'badge-wait';
                     const stCls = getStatusBadgeClass(t.status);
                     const stLbl = getStatusLabel(t.status);
-                    const pnl = t.pnlR || 0;
+                    const pnl = getPnlPips(t);
                     const pnlCls = pnl > 0 ? 'text-green-600' : pnl < 0 ? 'text-red-600' : 'text-gray-400';
-                    const pnlStr = pnl !== 0 ? `${pnl>0?'+':''}${pnl.toFixed(2)}R` : '—';
+                    const pnlStr = pnl !== 0 ? `${pnl>0?'+':''}${pnl}p` : '—';
                     const d = new Date(t.date + 'T00:00:00');
                     const ds = d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
                     const dy = d.toLocaleDateString('id-ID',{weekday:'short'});
@@ -1198,7 +1433,7 @@
                 content = `<div class="grid grid-cols-12 gap-2 px-3 py-2 bg-blue-50 text-[9px] uppercase tracking-wider text-blue-700 font-semibold">
                     <div class="col-span-2">Date</div><div class="col-span-2">Signal</div><div class="col-span-2">Entry</div>
                     <div class="col-span-2">SL</div><div class="col-span-3 text-center">Status</div><div class="col-span-1 text-right">PnL</div></div>${rows}
-                    <div class="px-3 py-2 border-t border-blue-100 text-[9px] text-gray-500 text-center bg-blue-50/50">Status di-recompute dari high/low sejak entry lock</div>`;
+                    <div class="px-3 py-2 border-t border-blue-100 text-[9px] text-gray-500 text-center bg-blue-50/50">Status di-recompute dari high/low sejak entry lock · PnL dalam pips</div>`;
             }
             return `<div class="card overflow-hidden">
                 <div class="p-3 md:p-4 border-b border-blue-100">
@@ -1212,7 +1447,7 @@
                             <div><span class="text-gray-500">Loss:</span> <span class="text-red-600 font-bold">${losses}</span></div>
                             <div><span class="text-gray-500">Active:</span> <span class="text-blue-600 font-bold">${active}</span></div>
                             <div><span class="text-gray-500">WR:</span> <span class="font-bold ${wr>=50?'text-green-600':'text-orange-500'}">${wr}%</span></div>
-                            <div><span class="text-gray-500">Total:</span> <span class="font-bold ${totalR>=0?'text-green-600':'text-red-600'} font-mono">${totalR>0?'+':''}${totalR.toFixed(2)}R</span></div>
+                            <div><span class="text-gray-500">Total:</span> <span class="font-bold ${totalPips>=0?'text-green-600':'text-red-600'} font-mono">${totalPips>0?'+':''}${totalPips}p</span></div>
                         </div>
                     </div>
                 </div>${content}</div>`;
@@ -1238,7 +1473,11 @@
             const parts = [];
             TIMEFRAMES.forEach(tf => {
                 const t = getTodayTrade(tf.interval);
-                if (t && t.signal && t.signal !== 'WAIT') parts.push(`${tf.label}: ${t.signal} · ${getStatusLabel(t.status||'ACTIVE')}`);
+                if (t && t.signal && t.signal !== 'WAIT') {
+                    const pp = getPnlPips(t);
+                    const extra = pp !== 0 ? (pp > 0 ? ` (+${pp}p)` : ` (${pp}p)`) : '';
+                    parts.push(`${tf.label}: ${t.signal} · ${getStatusLabel(t.status||'ACTIVE')}${extra}`);
+                }
             });
             if (parts.length) { badge.classList.remove('hidden'); badge.textContent = `🔒 ${parts.join('  |  ')}`; }
             else badge.classList.add('hidden');
@@ -1334,11 +1573,6 @@
                                         </div>
                                     </div>
                                     <div class="mt-1.5 text-[8px] text-gray-500 text-center italic">⏰ Force close 23:59 WIB jika belum hit TP</div>
-                                </div>
-                                <div class="mt-2 flex justify-between items-center text-[9px] text-gray-500">
-                                    <span>EMA20: <span class="font-mono text-gray-700">${a.ema20?a.ema20.toFixed(2):'-'}</span></span>
-                                    <span>EMA50: <span class="font-mono text-gray-700">${a.ema50?a.ema50.toFixed(2):'-'}</span></span>
-                                    <span>ATR: <span class="font-mono text-blue-600">$${a.atr.toFixed(2)}</span></span>
                                 </div>
                             </div>`;
                         } else {
