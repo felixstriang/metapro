@@ -1074,23 +1074,122 @@
                 const lv = computeEntryLevels(price, sig, 'intraday', candles, e30);
                 return { mode: 'INTRADAY', price, signal: sig, score: acc, candle_count: candles.length, levels: { entry: lv.entry, stop_loss: lv.stopLoss, tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3, pips: lv.pips } };
             }
-            const ema9 = computeEMA(closes, Math.min(9, closes.length-1));
-            const ema21 = computeEMA(closes, Math.min(21, closes.length-1));
-            const e9 = ema9[last] || price, e21 = ema21[last] || price;
-            const rsi = computeRSI(closes, 14)[last] || 50;
-            const macd = computeMACD(closes, 12, 26, 9);
-            const mVal = macd.macd[last] || 0, sVal = macd.signal[last] || 0;
-            let conc = 0;
-            if (price > e9) conc++; if (e9 > e21) conc++; if (mVal > sVal) conc++; if (rsi >= 53 || rsi <= 47) conc++;
-            const acc = clamp(Math.round(52 + conc*10), 50, 94);
-            let sig = 'WAIT';
-            if (conc >= 3 && price > e9) sig = 'STRONG BUY';
-            else if (conc >= 2 && price > e9) sig = 'BUY';
-            else if (conc >= 3 && price < e9) sig = 'STRONG SELL';
-            else if (conc >= 2 && price < e9) sig = 'SELL';
-            const lv = computeEntryLevels(price, sig, 'scalping', candles, e21);
-            return { mode: 'SCALPING', price, signal: sig, score: acc, candle_count: candles.length, levels: { entry: lv.entry, stop_loss: lv.stopLoss, tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3, pips: lv.pips } };
+        // ============================================================
+        // SCALPING M5 — ADVANCED MULTI-CONFLUENCE
+        // EMA9/21 + VWAP + BB + RSI + StochRSI + MACD + ADX/DMI + ATR + Volume + Pattern
+        // ============================================================
+        const ema9Arr = computeEMA(closes, 9);
+        const ema21Arr = computeEMA(closes, 21);
+        const e9 = ema9Arr[last] != null ? ema9Arr[last] : price;
+        const e21 = ema21Arr[last] != null ? ema21Arr[last] : price;
+        
+        const rsiS = (computeRSI(closes, 14)[last]) ?? 50;
+        
+        const macdS = computeMACD(closes, 12, 26, 9);
+        const mValS = macdS.macd[last] ?? 0;
+        const sValS = macdS.signal[last] ?? 0;
+        const histS = mValS - sValS;
+        const prevHistS = (macdS.macd[last-1] ?? 0) - (macdS.signal[last-1] ?? 0);
+        
+        const bbS = computeBollingerBands(closes, 20, 2);
+        const bbUpperS = bbS.upper[last] ?? price;
+        const bbLowerS = bbS.lower[last] ?? price;
+        const bbMidS   = bbS.middle[last] ?? price;
+        
+        const stochRSIS = computeStochRSI(closes, 14, 14, 3, 3);
+        const stochK = stochRSIS.k[last], stochD = stochRSIS.d[last];
+        const hasStoch = stochK != null && stochD != null;
+        
+        const adxS = computeADX(candles, 14);
+        const adxVal = adxS.adx[last], plusDIVal = adxS.plusDI[last], minusDIVal = adxS.minusDI[last];
+        const hasADX = adxVal != null && plusDIVal != null && minusDIVal != null;
+        const isTrending = hasADX && adxVal > 25;
+        const isRanging  = hasADX && adxVal < 20;
+        
+        const atrS = (computeATR(candles, 14)[last]) ?? 1.0;
+        const vwapVal = (computeVWAP(candles)[last]) ?? price;
+        const relVol = computeRelativeVolume(candles, 20);
+        const candlePattern = detectCandlePattern(candles[last], candles[last - 1]);
+        
+        // --- Confluence scoring ---
+        let buyScore = 0, sellScore = 0, totalWeight = 0;
+        
+        // 1. EMA9 vs EMA21 (w 2.0)
+        if (e9 > e21) buyScore += 2.0; else sellScore += 2.0; totalWeight += 2.0;
+        // 2. Price vs EMA21 (w 1.5)
+        if (price > e21) buyScore += 1.5; else sellScore += 1.5; totalWeight += 1.5;
+        // 3. MACD line vs signal (w 2.0)
+        if (mValS > sValS) buyScore += 2.0; else sellScore += 2.0; totalWeight += 2.0;
+        // 4. MACD histogram acceleration (w 1.0)
+        if (histS > prevHistS) buyScore += 1.0; else if (histS < prevHistS) sellScore += 1.0; totalWeight += 1.0;
+        // 5. RSI direction (w 1.5)
+        if (rsiS > 52) buyScore += 1.5; else if (rsiS < 48) sellScore += 1.5; totalWeight += 1.5;
+        // 6. Stochastic RSI crossover (w 1.5)
+        if (hasStoch) {
+            if (stochK > stochD && stochK < 80) buyScore += 1.5;
+            else if (stochK < stochD && stochK > 20) sellScore += 1.5;
+            totalWeight += 1.5;
         }
+        // 7. ADX trend / range + DI direction (w 2.0)
+        if (hasADX) {
+            if (isTrending) {
+                if (plusDIVal > minusDIVal) buyScore += 2.0; else sellScore += 2.0;
+            } else if (isRanging) {
+                if (price <= bbLowerS) buyScore += 1.5; else if (price >= bbUpperS) sellScore += 1.5;
+            } else {
+                if (plusDIVal > minusDIVal) buyScore += 1.0; else sellScore += 1.0;
+            }
+            totalWeight += 2.0;
+        }
+        // 8. VWAP position (w 1.5)
+        if (price > vwapVal) buyScore += 1.5; else sellScore += 1.5; totalWeight += 1.5;
+        // 9. Bollinger mean reversion (w 1.0)
+        if (price <= bbLowerS) buyScore += 1.0; else if (price >= bbUpperS) sellScore += 1.0; totalWeight += 1.0;
+        // 10. Candle pattern (w 1.0)
+        if (candlePattern === 'BULLISH_ENGULFING' || candlePattern === 'HAMMER') buyScore += 1.0;
+        else if (candlePattern === 'BEARISH_ENGULFING' || candlePattern === 'SHOOTING_STAR') sellScore += 1.0;
+        totalWeight += 1.0;
+        // 11. Volume confirmation (w 0.5)
+        if (relVol > 1.2) {
+            if (buyScore > sellScore) buyScore += 0.5;
+            else if (sellScore > buyScore) sellScore += 0.5;
+            totalWeight += 0.5;
+        }
+        
+        // --- Signal classification ---
+        const netScore = buyScore - sellScore;
+        const strength = totalWeight > 0 ? Math.abs(netScore) / totalWeight : 0;
+        let sigS = 'WAIT';
+        if (netScore > 0 && strength >= 0.30) sigS = 'STRONG BUY';
+        else if (netScore > 0 && strength >= 0.15) sigS = 'BUY';
+        else if (netScore < 0 && strength >= 0.30) sigS = 'STRONG SELL';
+        else if (netScore < 0 && strength >= 0.15) sigS = 'SELL';
+        
+        // RSI extreme filter
+        if (sigS.includes('BUY')  && rsiS > 78) sigS = 'WAIT';
+        if (sigS.includes('SELL') && rsiS < 22) sigS = 'WAIT';
+        
+        const accS = clamp(Math.round(50 + strength * 80), 50, 95);
+        const lvS = computeScalpingLevels(price, sigS, candles, atrS, e9, e21, vwapVal, bbMidS);
+        
+        return {
+            mode: 'SCALPING',
+            price,
+            signal: sigS,
+            score: accS,
+            candle_count: candles.length,
+            levels: { entry: lvS.entry, stop_loss: lvS.stopLoss, tp1: lvS.tp1, tp2: lvS.tp2, tp3: lvS.tp3, pips: lvS.pips },
+            indicators: {
+                ema9: e9, ema21: e21, vwap: vwapVal,
+                rsi: rsiS, stochK, stochD, macdHist: histS,
+                bbUpper: bbUpperS, bbLower: bbLowerS, bbMid: bbMidS,
+                adx: hasADX ? adxVal : null,
+                plusDI: hasADX ? plusDIVal : null,
+                minusDI: hasADX ? minusDIVal : null,
+                isTrending, isRanging, relVol, candlePattern,
+                atr: atrS, netScore, strength
+            }
+        };
 
         function isUSEvent(e) { const c = String(e.countryCode || e.country || '').toUpperCase().trim(); return US_COUNTRY_CODES.has(c); }
         function isHighImpact(e) { const imp = String(e.importance || e.impact || '').toLowerCase().trim(); return imp === 'high' || imp === '3' || imp === 'red'; }
