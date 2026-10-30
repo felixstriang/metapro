@@ -284,7 +284,7 @@
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-900">Metapro - Profesional Market Analys</span>
                     </h1>
                     <p class="text-sm text-gray-500 mt-1">
-                        © 2026 · Metapro v1.0.7 · XAUUSD
+                        © 2026 · Metapro v1.0.8 · XAUUSD
                         <span id="userDisplay" class="text-[10px] px-2 py-0.5 rounded font-mono ml-1" style="background:rgba(37,99,235,0.1);color:#2563EB;border:1px solid rgba(37,99,235,0.2);"></span>
                     </p>
                     <p class="text-sm text-gray-500 mt-1">M5 · M15 · H4 · Fundamental</p>
@@ -429,10 +429,19 @@
         let isFetching = false;
 
         const PIP_SIZE = 0.1;
+
+        // Pengaturan entry, SL, dan TP khusus untuk setiap timeframe XAUUSD.
+        // Jarak SL/TP ditetapkan dalam pips; PIP_SIZE = 0.1 harga XAUUSD per pip.
+        const TRADE_CONFIG = {
+            scalping: { entryOffsetPips: 2,  slPips: 30,  tp1Pips: 30,  tp2Pips: 60,  tp3Pips: 90 },
+            intraday: { entryOffsetPips: 12, slPips: 150, tp1Pips: 150, tp2Pips: 300, tp3Pips: 450 },
+            swing:    { entryOffsetPips: 30, slPips: 400, tp1Pips: 400, tp2Pips: 800, tp3Pips: 1200 },
+        };
+
         const TIMEFRAMES = [
-            { interval: '5min',  label: 'M5',  type: 'scalping', outputsize: 200, minCandles: 20 },
-            { interval: '15min', label: 'M15', type: 'intraday', outputsize: 200, minCandles: 30 },
-            { interval: '4h',    label: 'H4',  type: 'swing',    outputsize: 200, minCandles: 50 },
+            { interval: '5min',  label: 'M5',  type: 'scalping', outputsize: 200, minCandles: 60 },
+            { interval: '15min', label: 'M15', type: 'intraday', outputsize: 200, minCandles: 60 },
+            { interval: '4h',    label: 'H4',  type: 'swing',    outputsize: 200, minCandles: 60 },
         ];
         const US_COUNTRY_CODES = new Set(['US','USD','USA','UNITED STATES','UNITED_STATES','UNITEDSTATES','AMERICA']);
         const CALENDAR_API = 'https://biquote.io/api/calendar';
@@ -1061,94 +1070,138 @@
         }
 
         // ============================================================
-        // 🎯 STRATEGI UNIFIED: COPPOCK CURVE MULTI-FILTER
+        // 🎯 STRATEGI UNIFIED: EMA 20/50 + RSI 14 + MACD (12,26,9) + ATR 14
         // Berlaku untuk SEMUA timeframe (M5 / M15 / H4)
         // ============================================================
         function analyzeCandles(candles, mode) {
             const n = candles.length;
             const closes = candles.map(c => c.close);
-            const price = closes[n-1] || 0;
+            const price = closes[n - 1] || 0;
             const emptyLevels = { entry: null, stop_loss: null, tp1: null, tp2: null, tp3: null, pips: { sl: 0, tp1: 0, tp2: 0, tp3: 0 } };
 
-            if (n < 30) return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
-
-            const rocLong  = computeROC(closes, 14);
-            const rocShort = computeROC(closes, 11);
-            const rocSum   = new Array(n).fill(null);
-            for (let i = 0; i < n; i++) {
-                if (rocLong[i] !== null && rocShort[i] !== null) rocSum[i] = rocLong[i] + rocShort[i];
-            }
-            const coppockArr   = computeWMA(rocSum, 10);
-            const coppock      = coppockArr[n-1];
-            const prevCoppock  = coppockArr[n-2];
-            const prev2Coppock = coppockArr[n-3];
-
-            if (coppock === null || prevCoppock === null || prev2Coppock === null) {
+            // Butuh ≥ 55 candle (EMA50 + buffer)
+            if (n < 55) {
                 return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
             }
 
-            const bullCross = coppock > prevCoppock && prevCoppock <= prev2Coppock;
-            const bearCross = coppock < prevCoppock && prevCoppock >= prev2Coppock;
+            // ── Hitung indikator ──
+            const ema20Arr = computeEMA(closes, 20);
+            const ema50Arr = computeEMA(closes, 50);
+            const rsiArr   = computeRSI(closes, 14);
+            const macdData = computeMACD(closes, 12, 26, 9);
+            const atrArr   = computeATR(candles, 14);
 
-            const adxArr  = computeADX(candles, 14).adx;
-            const adx     = adxArr[n-1] ?? 0;
-            const adxPass = adx >= 20;
+            const ema20 = ema20Arr[n - 1];
+            const ema50 = ema50Arr[n - 1];
+            const rsi   = rsiArr[n - 1];
+            const macd  = macdData.macd[n - 1];
+            const macdSig = macdData.signal[n - 1];
+            const atr   = atrArr[n - 1] ?? (candles[n - 1].high - candles[n - 1].low);
 
-            const volSma  = computeSMA(candles.map(c => c.volume || 0), 20);
-            const volAvg  = volSma[n-1] || 0;
-            const currVol = candles[n-1].volume || 0;
-            const volPass = volAvg > 0 ? currVol > volAvg : true;
+            if (ema20 === null || ema50 === null || rsi === null || macd === null || macdSig === null) {
+                return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
+            }
 
-            const atrArr = computeATR(candles, 14);
-            const atr     = atrArr[n-1] ?? (candles[n-1].high - candles[n-1].low);
-            const atrMult = 1.5;
+            const macdHist = macd - macdSig;
+            const prevMacd = macdData.macd[n - 2];
+            const prevMacdSig = macdData.signal[n - 2];
+            const prevMacdHist = (prevMacd !== null && prevMacdSig !== null) ? prevMacd - prevMacdSig : macdHist;
 
-            let signal = 'WAIT', score = 50;
+            // ── Skoring Bullish vs Bearish ──
+            let bullScore = 0, bearScore = 0;
+
+            // 1) TREN — EMA20 vs EMA50 (bobot 25)
+            if (ema20 > ema50) bullScore += 25;
+            else if (ema20 < ema50) bearScore += 25;
+
+            // 2) POSISI HARGA — harga vs EMA20 (bobot 15)
+            if (price > ema20) bullScore += 15;
+            else if (price < ema20) bearScore += 15;
+
+            // 3) RSI 14 — momentum + jenuh (bobot 15-20)
+            if (rsi < 30) {
+                bullScore += 20;          // oversold → potensi bounce
+            } else if (rsi > 70) {
+                bearScore += 20;          // overbought → potensi drop
+            } else if (rsi >= 55) {
+                bullScore += 15;          // momentum bullish
+            } else if (rsi <= 45) {
+                bearScore += 15;          // momentum bearish
+            }
+            // RSI 45-55 → netral, tidak ada poin
+
+            // 4) MACD line vs signal line (bobot 20)
+            if (macdHist > 0) bullScore += 20;
+            else if (macdHist < 0) bearScore += 20;
+
+            // 5) MACD histogram momentum (bobot 10)
+            if (macdHist > prevMacdHist) bullScore += 10;
+            else if (macdHist < prevMacdHist) bearScore += 10;
+
+            const net = bullScore - bearScore;
+
+            // ── Tentukan sinyal ──
+            let signal = 'WAIT';
+            let score  = 50;
+
+            if (net >= 45 && bullScore >= 50) {
+                signal = 'STRONG BUY';
+                score  = 65 + Math.round(net * 0.4);
+            } else if (net >= 20 && bullScore >= 35) {
+                signal = 'BUY';
+                score  = 60 + Math.round(net * 0.3);
+            } else if (net <= -45 && bearScore >= 50) {
+                signal = 'STRONG SELL';
+                score  = 65 + Math.round(-net * 0.4);
+            } else if (net <= -20 && bearScore >= 35) {
+                signal = 'SELL';
+                score  = 60 + Math.round(-net * 0.3);
+            } else {
+                score  = 50 + Math.round(Math.abs(net) * 0.5);
+            }
+
+            // ── Entry + SL/TP khusus timeframe (jarak berbasis pips) ──
+            // Entry dibuat sebagai level rencana: BUY di bawah harga terakhir,
+            // SELL di atas harga terakhir. Jaraknya berbeda untuk tiap timeframe.
             let entry = null, stopLoss = null, tp1 = null, tp2 = null, tp3 = null;
             let pips = { sl: 0, tp1: 0, tp2: 0, tp3: 0 };
+            const tradeCfg = TRADE_CONFIG[mode] || TRADE_CONFIG.scalping;
 
-            if (bullCross && adxPass && volPass) {
-                signal = 'BUY';
-                score = 65;
-                score += (adx >= 30) ? 15 : 10;
-                if (volAvg > 0) score += (currVol >= volAvg * 1.5) ? 10 : 5;
-
-                entry = price;
-                stopLoss = entry - atr * atrMult;
-                const risk = entry - stopLoss;
-                tp1 = entry + risk * 1.0;
-                tp2 = entry + risk * 2.0;
-                tp3 = entry + risk * 3.0;
-
+            if (signal.includes('BUY')) {
+                entry = price - tradeCfg.entryOffsetPips * PIP_SIZE;
+                stopLoss = entry - tradeCfg.slPips * PIP_SIZE;
+                tp1 = entry + tradeCfg.tp1Pips * PIP_SIZE;
+                tp2 = entry + tradeCfg.tp2Pips * PIP_SIZE;
+                tp3 = entry + tradeCfg.tp3Pips * PIP_SIZE;
                 pips = {
-                    sl: Math.round(Math.abs(entry - stopLoss) / PIP_SIZE),
-                    tp1: Math.round(Math.abs(tp1 - entry) / PIP_SIZE),
-                    tp2: Math.round(Math.abs(tp2 - entry) / PIP_SIZE),
-                    tp3: Math.round(Math.abs(tp3 - entry) / PIP_SIZE)
+                    sl: tradeCfg.slPips,
+                    tp1: tradeCfg.tp1Pips,
+                    tp2: tradeCfg.tp2Pips,
+                    tp3: tradeCfg.tp3Pips,
                 };
-            } else if (bearCross && adxPass && volPass) {
-                signal = 'SELL';
-                score = 65;
-                score += (adx >= 30) ? 15 : 10;
-                if (volAvg > 0) score += (currVol >= volAvg * 1.5) ? 10 : 5;
-
-                entry = price;
-                stopLoss = entry + atr * atrMult;
-                const risk = stopLoss - entry;
-                tp1 = entry - risk * 1.0;
-                tp2 = entry - risk * 2.0;
-                tp3 = entry - risk * 3.0;
-
+            } else if (signal.includes('SELL')) {
+                entry = price + tradeCfg.entryOffsetPips * PIP_SIZE;
+                stopLoss = entry + tradeCfg.slPips * PIP_SIZE;
+                tp1 = entry - tradeCfg.tp1Pips * PIP_SIZE;
+                tp2 = entry - tradeCfg.tp2Pips * PIP_SIZE;
+                tp3 = entry - tradeCfg.tp3Pips * PIP_SIZE;
                 pips = {
-                    sl: Math.round(Math.abs(stopLoss - entry) / PIP_SIZE),
-                    tp1: Math.round(Math.abs(entry - tp1) / PIP_SIZE),
-                    tp2: Math.round(Math.abs(entry - tp2) / PIP_SIZE),
-                    tp3: Math.round(Math.abs(entry - tp3) / PIP_SIZE)
+                    sl: tradeCfg.slPips,
+                    tp1: tradeCfg.tp1Pips,
+                    tp2: tradeCfg.tp2Pips,
+                    tp3: tradeCfg.tp3Pips,
                 };
             }
 
-            score = Math.round(clamp(score, 50, 95));
-            return { mode: mode.toUpperCase(), price, signal, score, candle_count: n, levels: { entry, stop_loss: stopLoss, tp1, tp2, tp3, pips } };
+            return {
+                mode: mode.toUpperCase(),
+                price,
+                signal,
+                score: Math.round(clamp(score, 50, 95)),
+                candle_count: n,
+                levels: { entry, stop_loss: stopLoss, tp1, tp2, tp3, pips },
+                indicators: { ema20, ema50, rsi, macd, macdSignal: macdSig, macdHist, atr }
+            };
         }
 
         // ============================================================
@@ -1600,7 +1653,9 @@
                         const accVal = a.score;
                         const accColor = accVal >= 80 ? 'text-emerald-600' : accVal >= 70 ? 'text-amber-600' : 'text-orange-600';
                         const barColor = accVal >= 80 ? 'bg-emerald-500' : accVal >= 70 ? 'bg-amber-500' : 'bg-orange-500';
-                        let levelsHTML = '';
+                        // Panel indikator pemicu disembunyikan dari card.
+                        const indHTML = '';
+let levelsHTML = '';
                         if (L.stop_loss !== null) {
                             const risk = Math.abs(L.entry - L.stop_loss);
                             const rr = risk > 0 ? (Math.abs(L.tp1-L.entry)/risk).toFixed(2) : '-';
@@ -1610,7 +1665,6 @@
                                     <div class="flex gap-2"><span class="text-[9px] font-mono text-amber-600">Risk $${risk.toFixed(2)}</span><span class="text-[9px] font-mono text-blue-500">RR 1:${rr}</span></div>
                                 </div>
                                 <div class="space-y-1 text-xs">
-                                    <div class="flex justify-between items-center bg-blue-500/10 border-l-2 border-blue-500 rounded px-1.5 py-1"><span class="text-gray-500 text-[9px] uppercase">Entry</span><span class="font-mono text-blue-700 font-bold text-xs">${L.entry.toFixed(2)}</span></div>
                                     <div class="flex justify-between bg-red-500/10 border-l-2 border-red-500 rounded px-1.5 py-1"><span class="text-gray-500 text-[9px] uppercase">SL (${P.sl}p)</span><span class="font-mono text-red-600 font-bold text-xs">${L.stop_loss.toFixed(2)}</span></div>
                                     <div class="grid grid-cols-3 gap-1">
                                         <div class="bg-green-500/10 border-l-2 border-green-500 rounded px-1 py-1"><span class="text-gray-500 text-[8px] block">TP1 (${P.tp1}p)</span><span class="font-mono text-emerald-600 text-[10px] font-bold">${L.tp1.toFixed(2)}</span></div>
@@ -1620,7 +1674,7 @@
                                 </div>
                             </div>`;
                         } else {
-                            levelsHTML = `<div class="mt-2 bg-gray-50 rounded-lg p-2 border border-dashed border-gray-300"><p class="text-[10px] text-gray-500 text-center">WAIT · Market Sideways</p></div>`;
+                            levelsHTML = `<div class="mt-2 bg-gray-50 rounded-lg p-2 border border-dashed border-gray-300"><p class="text-[10px] text-gray-500 text-center">WAIT · Tidak ada setup valid</p></div>`;
                         }
                         card.innerHTML = `
                             <div class="flex justify-between items-start mb-1.5">
@@ -1629,6 +1683,7 @@
                             </div>
                             <div class="flex justify-between bg-gray-100 rounded px-2 py-1 mb-1.5"><span class="text-[9px] text-gray-500 uppercase">Harga</span><span class="font-mono text-gray-900 font-bold text-xs">${a.price.toFixed(2)}</span></div>
                             <div class="mb-2"><div class="accuracy-bar"><div class="accuracy-fill ${barColor}" style="width: ${accVal}%"></div></div></div>
+                            ${indHTML}
                             ${levelsHTML}`;
                         grid.appendChild(card);
                     });
