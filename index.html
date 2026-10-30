@@ -284,7 +284,7 @@
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-900">Metapro - Profesional Market Analys</span>
                     </h1>
                     <p class="text-sm text-gray-500 mt-1">
-                        © 2026 · Metapro v1.6 · XAUUSD
+                        © 2026 · Metapro v1.7 · XAUUSD
                         <span id="userDisplay" class="text-[10px] px-2 py-0.5 rounded font-mono ml-1" style="background:rgba(37,99,235,0.1);color:#2563EB;border:1px solid rgba(37,99,235,0.2);"></span>
                     </p>
                     <p class="text-sm text-gray-500 mt-1">M5 · M15 · H4 · Fundamental</p>
@@ -952,6 +952,45 @@
             for (let i = period; i < values.length; i++) { prev = ((values[i]-prev)*mult)+prev; r[i] = prev; }
             return r;
         }
+        // ── NEW: Simple Moving Average (untuk filter volume Coppock) ──
+        function computeSMA(values, period) {
+            const r = new Array(values.length).fill(null);
+            if (values.length < period) return r;
+            let sum = 0;
+            for (let i = 0; i < period; i++) sum += values[i];
+            r[period - 1] = sum / period;
+            for (let i = period; i < values.length; i++) {
+                sum = sum - values[i - period] + values[i];
+                r[i] = sum / period;
+            }
+            return r;
+        }
+        // ── NEW: Rate of Change — basis untuk Coppock Curve ──
+        function computeROC(values, period) {
+            const r = new Array(values.length).fill(null);
+            for (let i = period; i < values.length; i++) {
+                if (values[i - period] !== 0) {
+                    r[i] = ((values[i] - values[i - period]) / values[i - period]) * 100;
+                }
+            }
+            return r;
+        }
+        // ── NEW: Weighted Moving Average — untuk smoothing Coppock ──
+        function computeWMA(values, period) {
+            const r = new Array(values.length).fill(null);
+            if (values.length < period) return r;
+            const denom = (period * (period + 1)) / 2;
+            for (let i = period - 1; i < values.length; i++) {
+                let sum = 0, hasNull = false;
+                for (let j = 0; j < period; j++) {
+                    const v = values[i - j];
+                    if (v === null || v === undefined) { hasNull = true; break; }
+                    sum += v * (period - j);
+                }
+                if (!hasNull) r[i] = sum / denom;
+            }
+            return r;
+        }
         function computeRSI(v, p = 14) {
             const r = new Array(v.length).fill(null);
             if (v.length <= p) return r;
@@ -1012,7 +1051,7 @@
         }
 
         // ============================================================
-        // 🔬 ADVANCED INDICATORS FOR M5 SCALPING
+        // 🔬 ADVANCED INDICATORS (dipertahankan — masih dipakai fungsi lain)
         // ============================================================
         function computeVWAP(candles) {
             let cumPV = 0, cumV = 0;
@@ -1167,151 +1206,104 @@
             };
         }
 
+        // ============================================================
+        // 🎯 STRATEGI UNIFIED: COPPOCK CURVE MULTI-FILTER
+        // Berlaku untuk SEMUA timeframe (M5 / M15 / H4)
+        // Formula: Coppock = WMA( ROC(14) + ROC(11), 10 )
+        // Signal : slope reversal (crossover vs lag)
+        // Filter : ADX ≥ 20, Volume > SMA(20)
+        // Trade  : SL = 1.5 × ATR, TP = 1R / 2R / 3R
+        // ============================================================
         function analyzeCandles(candles, mode) {
+            const n = candles.length;
             const closes = candles.map(c => c.close);
-            const price = closes[closes.length-1];
-            const last = closes.length-1;
-            if (mode === 'swing') {
-                const ema20 = computeEMA(closes, Math.min(20, closes.length-1));
-                const ema50 = computeEMA(closes, Math.min(50, closes.length-1));
-                const e20 = ema20[last] || price, e50 = ema50[last] || price;
-                const rsi = computeRSI(closes, 14)[last] || 50;
-                const macd = computeMACD(closes, 12, 26, 9);
-                const mVal = macd.macd[last] || 0, sVal = macd.signal[last] || 0;
-                let conc = 0;
-                if (price > e20) conc++; if (e20 > e50) conc++; if (mVal > sVal) conc++; if (rsi >= 55 || rsi <= 45) conc++;
-                const acc = clamp(Math.round(50 + conc*10.5), 50, 95);
-                let sig = 'WAIT';
-                if (conc >= 3 && price > e20) sig = 'STRONG BUY';
-                else if (conc >= 2 && price > e20) sig = 'BUY';
-                else if (conc >= 3 && price < e20) sig = 'STRONG SELL';
-                else if (conc >= 2 && price < e20) sig = 'SELL';
-                const lv = computeEntryLevels(price, sig, 'swing', candles, e50);
-                return { mode: 'SWING', price, signal: sig, score: acc, candle_count: candles.length, levels: { entry: lv.entry, stop_loss: lv.stopLoss, tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3, pips: lv.pips } };
+            const price = closes[n-1] || 0;
+            const emptyLevels = { entry: null, stop_loss: null, tp1: null, tp2: null, tp3: null, pips: { sl: 0, tp1: 0, tp2: 0, tp3: 0 } };
+
+            if (n < 30) return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
+
+            // 1. Coppock = WMA(ROC14 + ROC11, 10)
+            const rocLong  = computeROC(closes, 14);
+            const rocShort = computeROC(closes, 11);
+            const rocSum   = new Array(n).fill(null);
+            for (let i = 0; i < n; i++) {
+                if (rocLong[i] !== null && rocShort[i] !== null) rocSum[i] = rocLong[i] + rocShort[i];
             }
-            if (mode === 'intraday') {
-                const ema10 = computeEMA(closes, Math.min(10, closes.length-1));
-                const ema30 = computeEMA(closes, Math.min(30, closes.length-1));
-                const e10 = ema10[last] || price, e30 = ema30[last] || price;
-                const rsi = computeRSI(closes, 14)[last] || 50;
-                const macd = computeMACD(closes, 12, 26, 9);
-                const mVal = macd.macd[last] || 0, sVal = macd.signal[last] || 0;
-                let conc = 0;
-                if (price > e10) conc++; if (e10 > e30) conc++; if (mVal > sVal) conc++; if (rsi >= 52 || rsi <= 48) conc++;
-                const acc = clamp(Math.round(52 + conc*10), 50, 94);
-                let sig = 'WAIT';
-                if (conc >= 3 && price > e10) sig = 'STRONG BUY';
-                else if (conc >= 2 && price > e10) sig = 'BUY';
-                else if (conc >= 3 && price < e10) sig = 'STRONG SELL';
-                else if (conc >= 2 && price < e10) sig = 'SELL';
-                const lv = computeEntryLevels(price, sig, 'intraday', candles, e30);
-                return { mode: 'INTRADAY', price, signal: sig, score: acc, candle_count: candles.length, levels: { entry: lv.entry, stop_loss: lv.stopLoss, tp1: lv.tp1, tp2: lv.tp2, tp3: lv.tp3, pips: lv.pips } };
+            const coppockArr   = computeWMA(rocSum, 10);
+            const coppock      = coppockArr[n-1];
+            const prevCoppock  = coppockArr[n-2];
+            const prev2Coppock = coppockArr[n-3];
+
+            if (coppock === null || prevCoppock === null || prev2Coppock === null) {
+                return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
             }
 
-            // ============================================================
-            // SCALPING M5 — ADVANCED MULTI-CONFLUENCE
-            // EMA9/21 + VWAP + BB + RSI + StochRSI + MACD + ADX/DMI + ATR + Volume + Pattern
-            // ============================================================
-            const ema9Arr = computeEMA(closes, 9);
-            const ema21Arr = computeEMA(closes, 21);
-            const e9 = ema9Arr[last] != null ? ema9Arr[last] : price;
-            const e21 = ema21Arr[last] != null ? ema21Arr[last] : price;
+            // 2. Slope reversal signal
+            const bullCross = coppock > prevCoppock && prevCoppock <= prev2Coppock;
+            const bearCross = coppock < prevCoppock && prevCoppock >= prev2Coppock;
 
-            const rsiS = (computeRSI(closes, 14)[last]) ?? 50;
+            // 3. Filters
+            const adxArr  = computeADX(candles, 14).adx;
+            const adx     = adxArr[n-1] ?? 0;
+            const adxPass = adx >= 20;
 
-            const macdS = computeMACD(closes, 12, 26, 9);
-            const mValS = macdS.macd[last] ?? 0;
-            const sValS = macdS.signal[last] ?? 0;
-            const histS = mValS - sValS;
-            const prevHistS = (macdS.macd[last-1] ?? 0) - (macdS.signal[last-1] ?? 0);
+            const volSma  = computeSMA(candles.map(c => c.volume || 0), 20);
+            const volAvg  = volSma[n-1] || 0;
+            const currVol = candles[n-1].volume || 0;
+            const volPass = volAvg > 0 ? currVol > volAvg : true;
 
-            const bbS = computeBollingerBands(closes, 20, 2);
-            const bbUpperS = bbS.upper[last] ?? price;
-            const bbLowerS = bbS.lower[last] ?? price;
-            const bbMidS   = bbS.middle[last] ?? price;
+            // 4. ATR-based trade levels
+            const atrArr = computeATR(candles, 14);
+            const atr     = atrArr[n-1] ?? (candles[n-1].high - candles[n-1].low);
+            const atrMult = 1.5;
 
-            const stochRSIS = computeStochRSI(closes, 14, 14, 3, 3);
-            const stochK = stochRSIS.k[last], stochD = stochRSIS.d[last];
-            const hasStoch = stochK != null && stochD != null;
+            // 5. Build signal
+            let signal = 'WAIT', score = 50;
+            let entry = null, stopLoss = null, tp1 = null, tp2 = null, tp3 = null;
+            let pips = { sl: 0, tp1: 0, tp2: 0, tp3: 0 };
 
-            const adxS = computeADX(candles, 14);
-            const adxVal = adxS.adx[last], plusDIVal = adxS.plusDI[last], minusDIVal = adxS.minusDI[last];
-            const hasADX = adxVal != null && plusDIVal != null && minusDIVal != null;
-            const isTrending = hasADX && adxVal > 25;
-            const isRanging  = hasADX && adxVal < 20;
+            if (bullCross && adxPass && volPass) {
+                signal = 'BUY';
+                score = 65;
+                score += (adx >= 30) ? 15 : 10;
+                if (volAvg > 0) score += (currVol >= volAvg * 1.5) ? 10 : 5;
 
-            const atrS = (computeATR(candles, 14)[last]) ?? 1.0;
-            const vwapVal = (computeVWAP(candles)[last]) ?? price;
-            const relVol = computeRelativeVolume(candles, 20);
-            const candlePattern = detectCandlePattern(candles[last], candles[last - 1]);
+                entry = price;
+                stopLoss = entry - atr * atrMult;
+                const risk = entry - stopLoss;
+                tp1 = entry + risk * 1.0;
+                tp2 = entry + risk * 2.0;
+                tp3 = entry + risk * 3.0;
 
-            let buyScore = 0, sellScore = 0, totalWeight = 0;
+                pips = {
+                    sl: Math.round(Math.abs(entry - stopLoss) / PIP_SIZE),
+                    tp1: Math.round(Math.abs(tp1 - entry) / PIP_SIZE),
+                    tp2: Math.round(Math.abs(tp2 - entry) / PIP_SIZE),
+                    tp3: Math.round(Math.abs(tp3 - entry) / PIP_SIZE)
+                };
+            } else if (bearCross && adxPass && volPass) {
+                signal = 'SELL';
+                score = 65;
+                score += (adx >= 30) ? 15 : 10;
+                if (volAvg > 0) score += (currVol >= volAvg * 1.5) ? 10 : 5;
 
-            // 1. EMA9 vs EMA21 (w 2.0)
-            if (e9 > e21) buyScore += 2.0; else sellScore += 2.0; totalWeight += 2.0;
-            // 2. Price vs EMA21 (w 1.5)
-            if (price > e21) buyScore += 1.5; else sellScore += 1.5; totalWeight += 1.5;
-            // 3. MACD line vs signal (w 2.0)
-            if (mValS > sValS) buyScore += 2.0; else sellScore += 2.0; totalWeight += 2.0;
-            // 4. MACD histogram acceleration (w 1.0)
-            if (histS > prevHistS) buyScore += 1.0; else if (histS < prevHistS) sellScore += 1.0; totalWeight += 1.0;
-            // 5. RSI direction (w 1.5)
-            if (rsiS > 52) buyScore += 1.5; else if (rsiS < 48) sellScore += 1.5; totalWeight += 1.5;
-            // 6. Stochastic RSI crossover (w 1.5)
-            if (hasStoch) {
-                if (stochK > stochD && stochK < 80) buyScore += 1.5;
-                else if (stochK < stochD && stochK > 20) sellScore += 1.5;
-                totalWeight += 1.5;
-            }
-            // 7. ADX trend / range + DI direction (w 2.0)
-            if (hasADX) {
-                if (isTrending) {
-                    if (plusDIVal > minusDIVal) buyScore += 2.0; else sellScore += 2.0;
-                } else if (isRanging) {
-                    if (price <= bbLowerS) buyScore += 1.5; else if (price >= bbUpperS) sellScore += 1.5;
-                } else {
-                    if (plusDIVal > minusDIVal) buyScore += 1.0; else sellScore += 1.0;
-                }
-                totalWeight += 2.0;
-            }
-            // 8. VWAP position (w 1.5)
-            if (price > vwapVal) buyScore += 1.5; else sellScore += 1.5; totalWeight += 1.5;
-            // 9. Bollinger mean reversion (w 1.0)
-            if (price <= bbLowerS) buyScore += 1.0; else if (price >= bbUpperS) sellScore += 1.0; totalWeight += 1.0;
-            // 10. Candle pattern (w 1.0)
-            if (candlePattern === 'BULLISH_ENGULFING' || candlePattern === 'HAMMER') buyScore += 1.0;
-            else if (candlePattern === 'BEARISH_ENGULFING' || candlePattern === 'SHOOTING_STAR') sellScore += 1.0;
-            totalWeight += 1.0;
-            // 11. Volume confirmation (w 0.5)
-            if (relVol > 1.2) {
-                if (buyScore > sellScore) buyScore += 0.5;
-                else if (sellScore > buyScore) sellScore += 0.5;
-                totalWeight += 0.5;
+                entry = price;
+                stopLoss = entry + atr * atrMult;
+                const risk = stopLoss - entry;
+                tp1 = entry - risk * 1.0;
+                tp2 = entry - risk * 2.0;
+                tp3 = entry - risk * 3.0;
+
+                pips = {
+                    sl: Math.round(Math.abs(stopLoss - entry) / PIP_SIZE),
+                    tp1: Math.round(Math.abs(entry - tp1) / PIP_SIZE),
+                    tp2: Math.round(Math.abs(entry - tp2) / PIP_SIZE),
+                    tp3: Math.round(Math.abs(entry - tp3) / PIP_SIZE)
+                };
             }
 
-            const netScore = buyScore - sellScore;
-            const strength = totalWeight > 0 ? Math.abs(netScore) / totalWeight : 0;
-            let sigS = 'WAIT';
-            if (netScore > 0 && strength >= 0.30) sigS = 'STRONG BUY';
-            else if (netScore > 0 && strength >= 0.15) sigS = 'BUY';
-            else if (netScore < 0 && strength >= 0.30) sigS = 'STRONG SELL';
-            else if (netScore < 0 && strength >= 0.15) sigS = 'SELL';
-
-            // RSI extreme filter
-            if (sigS.includes('BUY')  && rsiS > 78) sigS = 'WAIT';
-            if (sigS.includes('SELL') && rsiS < 22) sigS = 'WAIT';
-
-            const accS = clamp(Math.round(50 + strength * 80), 50, 95);
-            const lvS = computeScalpingLevels(price, sigS, candles, atrS, e9, e21, vwapVal, bbMidS);
-
-            return {
-                mode: 'SCALPING',
-                price,
-                signal: sigS,
-                score: accS,
-                candle_count: candles.length,
-                levels: { entry: lvS.entry, stop_loss: lvS.stopLoss, tp1: lvS.tp1, tp2: lvS.tp2, tp3: lvS.tp3, pips: lvS.pips }
-            };
+            score = Math.round(clamp(score, 50, 95));
+            return { mode: mode.toUpperCase(), price, signal, score, candle_count: n, levels: { entry, stop_loss: stopLoss, tp1, tp2, tp3, pips } };
         }
 
         function isUSEvent(e) { const c = String(e.countryCode || e.country || '').toUpperCase().trim(); return US_COUNTRY_CODES.has(c); }
