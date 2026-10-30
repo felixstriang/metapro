@@ -284,7 +284,7 @@
                         <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-blue-900">Metapro - Profesional Market Analys</span>
                     </h1>
                     <p class="text-sm text-gray-500 mt-1">
-                        © 2026 · Metapro v1.7 · XAUUSD
+                        © 2026 · Metapro v1.0.7 · XAUUSD
                         <span id="userDisplay" class="text-[10px] px-2 py-0.5 rounded font-mono ml-1" style="background:rgba(37,99,235,0.1);color:#2563EB;border:1px solid rgba(37,99,235,0.2);"></span>
                     </p>
                     <p class="text-sm text-gray-500 mt-1">M5 · M15 · H4 · Fundamental</p>
@@ -429,16 +429,6 @@
         let isFetching = false;
 
         const PIP_SIZE = 0.1;
-        const PIP_CONFIG = {
-            scalping: { sl: 30,  tp1: 30,  tp2: 60,  tp3: 100 },
-            intraday: { sl: 100, tp1: 60,  tp2: 120, tp3: 200 },
-            swing:    { sl: 200, tp1: 200, tp2: 400, tp3: 600 },
-        };
-        const PULLBACK_CONFIG = {
-            scalping: { lookback: 20, emaPeriod: 21, fibMin: 0.500, fibMax: 0.618 },
-            intraday: { lookback: 30, emaPeriod: 30, fibMin: 0.500, fibMax: 0.618 },
-            swing:    { lookback: 50, emaPeriod: 50, fibMin: 0.500, fibMax: 0.618 },
-        };
         const TIMEFRAMES = [
             { interval: '5min',  label: 'M5',  type: 'scalping', outputsize: 200, minCandles: 20 },
             { interval: '15min', label: 'M15', type: 'intraday', outputsize: 200, minCandles: 30 },
@@ -912,7 +902,7 @@
         }
 
         // ============================================================
-        // 📊 ANALYSIS
+        // 📊 ANALYSIS CORE
         // ============================================================
         function num(v, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
         function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
@@ -952,7 +942,6 @@
             for (let i = period; i < values.length; i++) { prev = ((values[i]-prev)*mult)+prev; r[i] = prev; }
             return r;
         }
-        // ── NEW: Simple Moving Average (untuk filter volume Coppock) ──
         function computeSMA(values, period) {
             const r = new Array(values.length).fill(null);
             if (values.length < period) return r;
@@ -965,7 +954,6 @@
             }
             return r;
         }
-        // ── NEW: Rate of Change — basis untuk Coppock Curve ──
         function computeROC(values, period) {
             const r = new Array(values.length).fill(null);
             for (let i = period; i < values.length; i++) {
@@ -975,7 +963,6 @@
             }
             return r;
         }
-        // ── NEW: Weighted Moving Average — untuk smoothing Coppock ──
         function computeWMA(values, period) {
             const r = new Array(values.length).fill(null);
             if (values.length < period) return r;
@@ -1030,83 +1017,6 @@
             for (let i = 0; i < v.length; i++) { if (m[i] !== null) { if (sc[ci] !== null) sl[i] = sc[ci]; ci++; } }
             return { macd: m, signal: sl };
         }
-        function computeEntryLevels(price, dir, mode, candles, emaValue) {
-            const cfg = PULLBACK_CONFIG[mode];
-            const pipsCfg = PIP_CONFIG[mode];
-            if (!cfg || !pipsCfg || (!dir.includes('BUY') && !dir.includes('SELL'))) return { entry: null, stopLoss: null, tp1: null, tp2: null, tp3: null, pips: pipsCfg };
-            const recent = candles.slice(-cfg.lookback);
-            const swingHigh = Math.max(...recent.map(c => c.high));
-            const swingLow = Math.min(...recent.map(c => c.low));
-            const range = swingHigh - swingLow;
-            let zoneMin, zoneMax;
-            if (dir.includes('BUY')) { zoneMin = swingHigh - range*cfg.fibMax; zoneMax = swingHigh - range*cfg.fibMin; }
-            else { zoneMin = swingLow + range*cfg.fibMin; zoneMax = swingLow + range*cfg.fibMax; }
-            const emaInZone = emaValue && emaValue >= zoneMin && emaValue <= zoneMax;
-            const entry = emaInZone ? emaValue : (zoneMin + zoneMax)/2;
-            const sl = pipsCfg.sl*PIP_SIZE, t1 = pipsCfg.tp1*PIP_SIZE, t2 = pipsCfg.tp2*PIP_SIZE, t3 = pipsCfg.tp3*PIP_SIZE;
-            let stopLoss, tp1, tp2, tp3;
-            if (dir.includes('BUY')) { stopLoss = entry-sl; tp1 = entry+t1; tp2 = entry+t2; tp3 = entry+t3; }
-            else { stopLoss = entry+sl; tp1 = entry-t1; tp2 = entry-t2; tp3 = entry-t3; }
-            return { entry, stopLoss, tp1, tp2, tp3, pips: pipsCfg, zoneMin, zoneMax };
-        }
-
-        // ============================================================
-        // 🔬 ADVANCED INDICATORS (dipertahankan — masih dipakai fungsi lain)
-        // ============================================================
-        function computeVWAP(candles) {
-            let cumPV = 0, cumV = 0;
-            const result = [];
-            for (const c of candles) {
-                const tp = (c.high + c.low + c.close) / 3;
-                const vol = c.volume || 1;
-                cumPV += tp * vol;
-                cumV += vol;
-                result.push(cumPV / cumV);
-            }
-            return result;
-        }
-
-        function computeBollingerBands(values, period = 20, mult = 2) {
-            const upper = [], middle = [], lower = [];
-            for (let i = 0; i < values.length; i++) {
-                if (i < period - 1) { upper.push(null); middle.push(null); lower.push(null); continue; }
-                const slice = values.slice(i - period + 1, i + 1);
-                const sma = slice.reduce((a, b) => a + b, 0) / period;
-                const variance = slice.reduce((a, b) => a + Math.pow(b - sma, 2), 0) / period;
-                const sd = Math.sqrt(variance);
-                middle.push(sma); upper.push(sma + mult * sd); lower.push(sma - mult * sd);
-            }
-            return { upper, middle, lower };
-        }
-
-        function computeStochRSI(values, rsiPeriod = 14, stochPeriod = 14, smoothK = 3, smoothD = 3) {
-            const rsi = computeRSI(values, rsiPeriod);
-            const rawStoch = [];
-            for (let i = 0; i < rsi.length; i++) {
-                if (i < rsiPeriod + stochPeriod - 1 || rsi[i] === null) { rawStoch.push(null); continue; }
-                const slice = [];
-                for (let j = i - stochPeriod + 1; j <= i; j++) { if (rsi[j] !== null) slice.push(rsi[j]); }
-                if (slice.length < stochPeriod) { rawStoch.push(null); continue; }
-                const min = Math.min(...slice), max = Math.max(...slice);
-                rawStoch.push(max === min ? 50 : ((rsi[i] - min) / (max - min)) * 100);
-            }
-            const k = [];
-            for (let i = 0; i < rawStoch.length; i++) {
-                if (i < smoothK - 1 || rawStoch[i] === null) { k.push(null); continue; }
-                const slice = [];
-                for (let j = i - smoothK + 1; j <= i; j++) { if (rawStoch[j] !== null) slice.push(rawStoch[j]); }
-                k.push(slice.length === smoothK ? slice.reduce((a, b) => a + b, 0) / smoothK : null);
-            }
-            const d = [];
-            for (let i = 0; i < k.length; i++) {
-                if (i < smoothD - 1 || k[i] === null) { d.push(null); continue; }
-                const slice = [];
-                for (let j = i - smoothD + 1; j <= i; j++) { if (k[j] !== null) slice.push(k[j]); }
-                d.push(slice.length === smoothD ? slice.reduce((a, b) => a + b, 0) / smoothD : null);
-            }
-            return { k, d };
-        }
-
         function computeADX(candles, period = 14) {
             const len = candles.length;
             const tr = new Array(len).fill(null);
@@ -1150,69 +1060,9 @@
             return { adx, plusDI, minusDI };
         }
 
-        function detectCandlePattern(candle, prevCandle) {
-            if (!candle || !prevCandle) return null;
-            const body = Math.abs(candle.close - candle.open);
-            const range = candle.high - candle.low;
-            const upperWick = candle.high - Math.max(candle.open, candle.close);
-            const lowerWick = Math.min(candle.open, candle.close) - candle.low;
-            if (range === 0) return null;
-            if (body / range < 0.1) return 'DOJI';
-            if (prevCandle.close < prevCandle.open && candle.close > candle.open &&
-                candle.close > prevCandle.open && candle.open < prevCandle.close) return 'BULLISH_ENGULFING';
-            if (prevCandle.close > prevCandle.open && candle.close < candle.open &&
-                candle.close < prevCandle.open && candle.open > prevCandle.close) return 'BEARISH_ENGULFING';
-            if (lowerWick > body * 2 && upperWick < body * 0.5 && candle.close > candle.open) return 'HAMMER';
-            if (upperWick > body * 2 && lowerWick < body * 0.5 && candle.close < candle.open) return 'SHOOTING_STAR';
-            return null;
-        }
-
-        function computeRelativeVolume(candles, period = 20) {
-            if (candles.length < period + 1) return 1;
-            const recent = candles.slice(-period - 1, -1);
-            const avg = recent.reduce((a, c) => a + (c.volume || 0), 0) / period;
-            const current = candles[candles.length - 1].volume || 0;
-            return avg === 0 ? 1 : current / avg;
-        }
-
-        function computeScalpingLevels(price, dir, candles, atr, e9, e21, vwapVal, bbMid) {
-            if (!dir.includes('BUY') && !dir.includes('SELL')) {
-                return { entry: null, stopLoss: null, tp1: null, tp2: null, tp3: null, pips: { sl: 0, tp1: 0, tp2: 0, tp3: 0 } };
-            }
-            const isBuy = dir.includes('BUY');
-            const safeATR = Math.max(atr, 0.3);
-            const confluences = [e9, e21, vwapVal, bbMid].filter(v => v != null && isFinite(v));
-            let entry = price, bestDist = Infinity;
-            for (const c of confluences) {
-                if (isBuy && c > price) continue;
-                if (!isBuy && c < price) continue;
-                const dist = Math.abs(price - c);
-                if (dist <= safeATR && dist < bestDist) { bestDist = dist; entry = c; }
-            }
-            if (Math.abs(price - entry) > safeATR * 1.2) entry = price;
-
-            const slDist = safeATR * 1.2, t1Dist = safeATR * 1.2, t2Dist = safeATR * 2.4, t3Dist = safeATR * 3.6;
-            let stopLoss, tp1, tp2, tp3;
-            if (isBuy) { stopLoss = entry - slDist; tp1 = entry + t1Dist; tp2 = entry + t2Dist; tp3 = entry + t3Dist; }
-            else       { stopLoss = entry + slDist; tp1 = entry - t1Dist; tp2 = entry - t2Dist; tp3 = entry - t3Dist; }
-
-            return {
-                entry, stopLoss, tp1, tp2, tp3,
-                pips: {
-                    sl: Math.round(slDist / PIP_SIZE), tp1: Math.round(t1Dist / PIP_SIZE),
-                    tp2: Math.round(t2Dist / PIP_SIZE), tp3: Math.round(t3Dist / PIP_SIZE)
-                },
-                atrBased: true, atr: safeATR
-            };
-        }
-
         // ============================================================
         // 🎯 STRATEGI UNIFIED: COPPOCK CURVE MULTI-FILTER
         // Berlaku untuk SEMUA timeframe (M5 / M15 / H4)
-        // Formula: Coppock = WMA( ROC(14) + ROC(11), 10 )
-        // Signal : slope reversal (crossover vs lag)
-        // Filter : ADX ≥ 20, Volume > SMA(20)
-        // Trade  : SL = 1.5 × ATR, TP = 1R / 2R / 3R
         // ============================================================
         function analyzeCandles(candles, mode) {
             const n = candles.length;
@@ -1222,7 +1072,6 @@
 
             if (n < 30) return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
 
-            // 1. Coppock = WMA(ROC14 + ROC11, 10)
             const rocLong  = computeROC(closes, 14);
             const rocShort = computeROC(closes, 11);
             const rocSum   = new Array(n).fill(null);
@@ -1238,11 +1087,9 @@
                 return { mode: mode.toUpperCase(), price, signal: 'WAIT', score: 50, candle_count: n, levels: emptyLevels };
             }
 
-            // 2. Slope reversal signal
             const bullCross = coppock > prevCoppock && prevCoppock <= prev2Coppock;
             const bearCross = coppock < prevCoppock && prevCoppock >= prev2Coppock;
 
-            // 3. Filters
             const adxArr  = computeADX(candles, 14).adx;
             const adx     = adxArr[n-1] ?? 0;
             const adxPass = adx >= 20;
@@ -1252,12 +1099,10 @@
             const currVol = candles[n-1].volume || 0;
             const volPass = volAvg > 0 ? currVol > volAvg : true;
 
-            // 4. ATR-based trade levels
             const atrArr = computeATR(candles, 14);
             const atr     = atrArr[n-1] ?? (candles[n-1].high - candles[n-1].low);
             const atrMult = 1.5;
 
-            // 5. Build signal
             let signal = 'WAIT', score = 50;
             let entry = null, stopLoss = null, tp1 = null, tp2 = null, tp3 = null;
             let pips = { sl: 0, tp1: 0, tp2: 0, tp3: 0 };
@@ -1306,43 +1151,247 @@
             return { mode: mode.toUpperCase(), price, signal, score, candle_count: n, levels: { entry, stop_loss: stopLoss, tp1, tp2, tp3, pips } };
         }
 
-        function isUSEvent(e) { const c = String(e.countryCode || e.country || '').toUpperCase().trim(); return US_COUNTRY_CODES.has(c); }
-        function isHighImpact(e) { const imp = String(e.importance || e.impact || '').toLowerCase().trim(); return imp === 'high' || imp === '3' || imp === 'red'; }
+        // ============================================================
+        // 📰 NEWS DETECTION — SEMUA INDIKATOR US (55+)
+        // ============================================================
+        function isUSEvent(e) {
+            const c = String(e.countryCode || e.country || '').toUpperCase().trim();
+            return US_COUNTRY_CODES.has(c) || c.includes('UNITED') || c.includes('AMERICA') ||
+                   c.includes('USA') || c === 'US' || c === 'USD';
+        }
+        function isHighImpact(e) {
+            const imp = String(e.importance || e.impact || '').toLowerCase().trim();
+            return imp === 'high' || imp === '3' || imp === 'red' || imp.includes('high');
+        }
         function getCategory(name) {
             const t = (name || '').toLowerCase();
             if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) return 'NFP';
             if (t.includes('cpi') || t.includes('consumer price')) return 'CPI';
             if (t.includes('ppi') || t.includes('producer price')) return 'PPI';
+            if (t.includes('pce')) return 'PCE';
             if (t.includes('fomc') || t.includes('federal funds') || t.includes('fed funds')) return 'FOMC';
+            if (t.includes('gdp')) return 'GDP';
+            if (t.includes('retail sales')) return 'Retail';
+            if (t.includes('ism')) return 'ISM';
+            if (t.includes('chicago') || t.includes('barometer')) return 'Chicago PMI';
             return 'Economic Data';
         }
+
+        // ══ NEWS DIRECTION: positive (nilai naik = USD kuat) / negative (nilai naik = USD lemah)
+        function getNewsDirection(title) {
+            const t = (title || '').toLowerCase();
+
+            // ─── NEGATIVE (cek dulu karena "unemployment" mengandung "employment") ───
+            if (t.includes('unemployment')) return 'negative';
+            if (t.includes('jobless')) return 'negative';
+            if (t.includes('initial claims')) return 'negative';
+            if (t.includes('continuing claims')) return 'negative';
+
+            // ─── EMPLOYMENT (positive) ───
+            if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) return 'positive';
+            if (t.includes('adp')) return 'positive';
+            if (t.includes('payrolls')) return 'positive';
+            if (t.includes('employment change')) return 'positive';
+            if (t.includes('jolts')) return 'positive';
+            if (t.includes('average hourly earnings')) return 'positive';
+            if (t.includes('labor cost')) return 'positive';
+            if (t.includes('productivity')) return 'positive';
+
+            // ─── INFLATION (positive → Fed hawkish) ───
+            if (t.includes('core cpi') || t.includes('core pce')) return 'positive';
+            if (t.includes('cpi')) return 'positive';
+            if (t.includes('ppi')) return 'positive';
+            if (t.includes('consumer price')) return 'positive';
+            if (t.includes('producer price')) return 'positive';
+            if (t.includes('pce')) return 'positive';
+            if (t.includes('inflation')) return 'positive';
+            if (t.includes('import prices') || t.includes('export prices')) return 'positive';
+
+            // ─── INTEREST RATE / FED (positive) ───
+            if (t.includes('fomc')) return 'positive';
+            if (t.includes('rate decision')) return 'positive';
+            if (t.includes('interest rate')) return 'positive';
+            if (t.includes('federal funds') || t.includes('fed funds')) return 'positive';
+            if (t.includes('fed chair') || t.includes('powell')) return 'positive';
+            if (t.includes('fed statement') || t.includes('fed minutes')) return 'positive';
+            if (t.includes('discount rate')) return 'positive';
+
+            // ─── GROWTH ───
+            if (t.includes('gdp') || t.includes('gross domestic')) return 'positive';
+            if (t.includes('economic growth')) return 'positive';
+
+            // ─── CONSUMER ───
+            if (t.includes('retail sales')) return 'positive';
+            if (t.includes('consumer confidence')) return 'positive';
+            if (t.includes('consumer sentiment')) return 'positive';
+            if (t.includes('michigan')) return 'positive';
+            if (t.includes('personal spending') || t.includes('personal income')) return 'positive';
+
+            // ─── MANUFACTURING ───
+            if (t.includes('ism manufacturing')) return 'positive';
+            if (t.includes('manufacturing pmi')) return 'positive';
+            if (t.includes('manufacturing index')) return 'positive';
+            if (t.includes('industrial production')) return 'positive';
+            if (t.includes('factory orders')) return 'positive';
+            if (t.includes('durable goods')) return 'positive';
+            if (t.includes('capacity utilization')) return 'positive';
+
+            // ─── SERVICES ───
+            if (t.includes('ism services')) return 'positive';
+            if (t.includes('ism non-manufacturing')) return 'positive';
+            if (t.includes('services pmi')) return 'positive';
+            if (t.includes('non-manufacturing pmi')) return 'positive';
+
+            // ─── HOUSING ───
+            if (t.includes('building permits')) return 'positive';
+            if (t.includes('housing starts')) return 'positive';
+            if (t.includes('home sales')) return 'positive';
+            if (t.includes('existing home') || t.includes('new home')) return 'positive';
+            if (t.includes('pending home')) return 'positive';
+            if (t.includes('nahb')) return 'positive';
+            if (t.includes('case-shiller')) return 'positive';
+
+            // ─── BUSINESS ───
+            if (t.includes('business confidence') || t.includes('business optimism')) return 'positive';
+            if (t.includes('trade balance') || t.includes('current account')) return 'positive';
+            if (t.includes('wholesale inventories') || t.includes('retail inventories') || t.includes('business inventories')) return 'positive';
+
+            // ═══ REGIONAL FED MANUFACTURING / BUSINESS SURVEYS ═══
+            if (t.includes('chicago pmi') || t.includes('chicago business')) return 'positive';
+            if (t.includes('chicago fed')) return 'positive';
+            if (t.includes('barometer')) return 'positive';
+            if (t.includes('philly fed') || t.includes('philadelphia fed')) return 'positive';
+            if (t.includes('empire state')) return 'positive';
+            if (t.includes('richmond fed')) return 'positive';
+            if (t.includes('dallas fed')) return 'positive';
+            if (t.includes('kansas city fed')) return 'positive';
+            if (t.includes('mni chicago')) return 'positive';
+
+            // ═══ BUSINESS SENTIMENT ═══
+            if (t.includes('nfib')) return 'positive';
+            if (t.includes('ibd') || t.includes('tipp')) return 'positive';
+            if (t.includes('economic optimism')) return 'positive';
+
+            // ═══ FED PUBLICATIONS ═══
+            if (t.includes('beige book')) return 'positive';
+
+            // ═══ CREDIT / FLOWS / MORTGAGE ═══
+            if (t.includes('consumer credit')) return 'positive';
+            if (t.includes('mortgage applications')) return 'positive';
+            if (t.includes('tic long') || t.includes('treasury international')) return 'positive';
+
+            // ═══ RETAIL / CHAIN STORE ═══
+            if (t.includes('chain store') || t.includes('redbook')) return 'positive';
+
+            return null;
+        }
+
+        // Bobot: major 3, medium 2, minor 1
+        function getNewsWeight(title) {
+            const t = (title || '').toLowerCase();
+            // ── Major (3) ──
+            if (t.includes('fomc') || t.includes('rate decision') || t.includes('federal funds') || t.includes('fed funds')) return 3;
+            if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) return 3;
+            if (t.includes('cpi') || t.includes('consumer price')) return 3;
+            if (t.includes('pce')) return 3;
+            if (t.includes('gdp')) return 3;
+            if (t.includes('powell') || t.includes('fed chair')) return 3;
+            if (t.includes('beige book')) return 3;
+            // ── Medium (2) ──
+            if (t.includes('ppi') || t.includes('producer price')) return 2;
+            if (t.includes('retail sales')) return 2;
+            if (t.includes('ism')) return 2;
+            if (t.includes('adp')) return 2;
+            if (t.includes('unemployment')) return 2;
+            if (t.includes('jobless')) return 2;
+            if (t.includes('consumer confidence') || t.includes('consumer sentiment') || t.includes('michigan')) return 2;
+            if (t.includes('durable goods')) return 2;
+            if (t.includes('trade balance')) return 2;
+            // ── Regional Fed / Business Surveys ──
+            if (t.includes('chicago') || t.includes('philly') || t.includes('empire state')) return 2;
+            if (t.includes('barometer')) return 2;
+            if (t.includes('richmond fed') || t.includes('dallas fed') || t.includes('kansas city fed')) return 1;
+            // ── Business sentiment ──
+            if (t.includes('nfib') || t.includes('ibd') || t.includes('tipp')) return 1;
+            // ── Minor ──
+            if (t.includes('consumer credit') || t.includes('mortgage')) return 1;
+            if (t.includes('chain store') || t.includes('redbook')) return 1;
+            return 1;
+        }
+
+        // Recency: event < 24h bobot penuh, makin lama makin kecil
+        function getRecencyFactor(eventDate) {
+            try {
+                const ageHours = (Date.now() - new Date(eventDate).getTime()) / 3600000;
+                if (ageHours < 24) return 1.0;
+                if (ageHours < 72) return 0.7;
+                if (ageHours < 168) return 0.4;
+                return 0.2;
+            } catch(e) { return 0.5; }
+        }
+
+        // Parse nilai: handle %, K, M, B, T, prefix +/-
+        function parseNewsValue(raw) {
+            if (raw == null) return NaN;
+            let s = String(raw).trim().replace(/[%,\s]/g, '');
+            if (!s || s === '-' || s === '—' || s === 'N/A') return NaN;
+            let mult = 1;
+            if (s.endsWith('K') || s.endsWith('k')) { mult = 1e3; s = s.slice(0, -1); }
+            else if (s.endsWith('M') || s.endsWith('m')) { mult = 1e6; s = s.slice(0, -1); }
+            else if (s.endsWith('B') || s.endsWith('b')) { mult = 1e9; s = s.slice(0, -1); }
+            else if (s.endsWith('T') || s.endsWith('t')) { mult = 1e12; s = s.slice(0, -1); }
+            const n = parseFloat(s);
+            return isNaN(n) ? NaN : n * mult;
+        }
+
+        // Arah sinyal dari delta nilai
+        function directionToSignal(direction, value, baseline) {
+            if (direction == null) return 'NEUTRAL';
+            if (!isFinite(value) || !isFinite(baseline)) return 'NEUTRAL';
+            const delta = value - baseline;
+            if (Math.abs(delta) < 1e-9) return 'NEUTRAL';
+            if (direction === 'positive') {
+                return delta > 0 ? 'SELL' : 'BUY';
+            } else {
+                return delta > 0 ? 'BUY' : 'SELL';
+            }
+        }
+
+        // classifyPre: forecast vs previous
         function classifyPre(title, forecast, previous) {
-            if (forecast == null || previous == null) return 'NEUTRAL';
-            const f = parseFloat(String(forecast).replace('%','').replace('K','000').replace('M','000000'));
-            const p = parseFloat(String(previous).replace('%','').replace('K','000').replace('M','000000'));
-            if (isNaN(f) || isNaN(p)) return 'NEUTRAL';
-            const t = title.toLowerCase();
-            if (t.includes('unemployment')) { if (f > p) return 'BUY'; if (f < p) return 'SELL'; }
-            else if (t.includes('cpi') || t.includes('ppi') || t.includes('consumer price') || t.includes('producer price')) { if (f > p) return 'SELL'; if (f < p) return 'BUY'; }
-            else if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) { if (f > p) return 'SELL'; if (f < p) return 'BUY'; }
-            else if (t.includes('rate decision') || t.includes('interest rate') || t.includes('fomc') || t.includes('federal funds') || t.includes('fed funds')) { if (f > p) return 'SELL'; if (f < p) return 'BUY'; }
-            if (f > p) return 'SELL';
-            if (f < p) return 'BUY';
+            const direction = getNewsDirection(title);
+            if (direction == null) return 'NEUTRAL';
+            const f = parseNewsValue(forecast);
+            const p = parseNewsValue(previous);
+            return directionToSignal(direction, f, p);
+        }
+
+        // classifyRel: actual vs forecast (+ fallback FOMC rate change)
+        function classifyRel(title, actual, forecast, previous) {
+            const direction = getNewsDirection(title);
+            if (direction == null) return 'NEUTRAL';
+            const a = parseNewsValue(actual);
+            const f = parseNewsValue(forecast);
+            const p = parseNewsValue(previous);
+
+            if (isFinite(a) && isFinite(f)) {
+                const sig = directionToSignal(direction, a, f);
+                if (sig !== 'NEUTRAL') return sig;
+
+                const t = (title || '').toLowerCase();
+                const isRateNews = t.includes('rate') || t.includes('fomc') ||
+                                   t.includes('federal funds') || t.includes('fed funds');
+                if (isRateNews && isFinite(p)) {
+                    if (a > p) return 'SELL';
+                    if (a < p) return 'BUY';
+                }
+            }
             return 'NEUTRAL';
         }
-        function classifyRel(title, actual, forecast) {
-            if (actual == null || forecast == null) return 'NEUTRAL';
-            const a = parseFloat(String(actual).replace('%','').replace('K','000').replace('M','000000'));
-            const f = parseFloat(String(forecast).replace('%','').replace('K','000').replace('M','000000'));
-            if (isNaN(a) || isNaN(f)) return 'NEUTRAL';
-            const t = title.toLowerCase();
-            if (t.includes('cpi') || t.includes('ppi') || t.includes('consumer price') || t.includes('producer price')) { if (a > f) return 'SELL'; if (a < f) return 'BUY'; }
-            else if (t.includes('non-farm') || t.includes('nonfarm') || t.includes('nfp')) { if (a > f) return 'SELL'; if (a < f) return 'BUY'; }
-            else if (t.includes('rate decision') || t.includes('interest rate') || t.includes('fomc') || t.includes('federal funds') || t.includes('fed funds')) { if (a > f) return 'SELL'; if (a < f) return 'BUY'; }
-            if (a > f) return 'SELL';
-            if (a < f) return 'BUY';
-            return 'NEUTRAL';
-        }
+
+        // ============================================================
+        // 📰 ANALYZE FUNDAMENTAL
+        // ============================================================
         function analyzeFundamental(events, currentPrice, atrValue) {
             const now = new Date();
             const debug = { total: events.length, usCount: 0, usHigh: 0, matched: 0, endpoint: calendarCache.endpoint };
@@ -1371,29 +1420,48 @@
             let upcomingThisMonth = upcoming.filter(u => u.date <= endOfMonth);
             if (upcomingThisMonth.length === 0 && upcoming.length > 0) upcomingThisMonth = upcoming;
 
+            // ── RELEASED SCORING — weight + recency ──
             let buyScore = 0, sellScore = 0; const signals = [];
-            for (const r of released.slice(0,10)) {
-                const sent = classifyRel(r.title, r.actual, r.forecast);
-                if (sent === 'BUY') { buyScore += 2; signals.push({ ...r, sent: 'BUY' }); }
-                else if (sent === 'SELL') { sellScore += 2; signals.push({ ...r, sent: 'SELL' }); }
-                else signals.push({ ...r, sent: 'NEUTRAL' });
+            for (const r of released.slice(0, 15)) {
+                const sent = classifyRel(r.title, r.actual, r.forecast, r.previous);
+                const baseWeight = getNewsWeight(r.title);
+                const recency = getRecencyFactor(r.date);
+                const weight = baseWeight * recency;
+                if (sent === 'BUY') { buyScore += weight; signals.push({ ...r, sent: 'BUY', weight }); }
+                else if (sent === 'SELL') { sellScore += weight; signals.push({ ...r, sent: 'SELL', weight }); }
+                else signals.push({ ...r, sent: 'NEUTRAL', weight });
             }
-            let fundamentalSignal = 'WAIT', confidence = 0;
-            if (buyScore > sellScore && buyScore >= 2) { fundamentalSignal = 'BUY'; confidence = Math.min(95, 50+buyScore*10); }
-            else if (sellScore > buyScore && sellScore >= 2) { fundamentalSignal = 'SELL'; confidence = Math.min(95, 50+sellScore*10); }
 
+            let fundamentalSignal = 'WAIT', confidence = 0;
+            const netRel = buyScore - sellScore;
+            if (netRel > 0 && buyScore >= 2) {
+                fundamentalSignal = 'BUY';
+                confidence = Math.min(95, 55 + Math.min(40, Math.round(buyScore * 5)));
+            } else if (netRel < 0 && sellScore >= 2) {
+                fundamentalSignal = 'SELL';
+                confidence = Math.min(95, 55 + Math.min(40, Math.round(sellScore * 5)));
+            }
+
+            // ── UPCOMING SCORING — weight ──
             let preBuy = 0, preSell = 0; const upcomingWithPred = [];
             for (const u of upcomingThisMonth) {
-                const hasF = u.forecast !== '-', hasP = u.previous !== '-';
-                const canAnalyze = hasF && hasP && !isNaN(parseFloat(String(u.forecast).replace('%','').replace('K','000'))) && !isNaN(parseFloat(String(u.previous).replace('%','').replace('K','000')));
-                const sent = canAnalyze ? classifyPre(u.title, u.forecast, u.previous) : 'NEUTRAL';
-                const enriched = { ...u, preSent: sent, canAnalyze };
+                const sent = classifyPre(u.title, u.forecast, u.previous);
+                const weight = getNewsWeight(u.title);
+                const canAnalyze = sent !== 'NEUTRAL';
+                const enriched = { ...u, preSent: sent, weight, canAnalyze };
                 upcomingWithPred.push(enriched);
-                if (sent === 'BUY') preBuy += 2; else if (sent === 'SELL') preSell += 2;
+                if (sent === 'BUY') preBuy += weight;
+                else if (sent === 'SELL') preSell += weight;
             }
             let preSignal = 'WAIT', preConf = 0;
-            if (preBuy > preSell && preBuy >= 2) { preSignal = 'BUY'; preConf = Math.min(95, 50+preBuy*10); }
-            else if (preSell > preBuy && preSell >= 2) { preSignal = 'SELL'; preConf = Math.min(95, 50+preSell*10); }
+            const netPre = preBuy - preSell;
+            if (netPre > 0 && preBuy >= 2) {
+                preSignal = 'BUY';
+                preConf = Math.min(95, 55 + Math.min(40, Math.round(preBuy * 5)));
+            } else if (netPre < 0 && preSell >= 2) {
+                preSignal = 'SELL';
+                preConf = Math.min(95, 55 + Math.min(40, Math.round(preSell * 5)));
+            }
 
             let effSignal = fundamentalSignal, effConf = confidence, entrySource = 'released';
             if (fundamentalSignal === 'WAIT' && preSignal !== 'WAIT') { effSignal = preSignal; effConf = preConf; entrySource = 'pre-release'; }
