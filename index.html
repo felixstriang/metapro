@@ -47,6 +47,27 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 .gate-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue3),transparent);}
 .gate-emblem{width:64px;height:64px;border-radius:50%;border:2px solid var(--blue3);background:linear-gradient(135deg,#0b1b36,#102a56);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-family:var(--font-d);font-size:20px;font-weight:900;color:var(--blue2);text-shadow:var(--glow-b);box-shadow:var(--glow-b),inset 0 0 20px rgba(59,130,246,.1);}
 .gate-logo{font-family:var(--font-d);font-size:16px;letter-spacing:4px;color:var(--blue2);margin-bottom:4px;text-align:center;text-shadow:var(--glow-b);}
+.brand-mark{
+  width:48px;
+  height:48px;
+  margin:0 auto 10px;
+  border-radius:14px;
+  background:rgba(59,130,246,.08);
+  border:1px solid var(--border2);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  box-shadow:var(--glow-b);
+}
+.brand-mark img{
+  width:32px;
+  height:32px;
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  display:block;
+}
 .gate-tagline{font-family:var(--font-m);font-size:9px;letter-spacing:2px;color:var(--muted);text-align:center;margin-bottom:22px;}
 .gate-tabs{display:flex;margin-bottom:18px;border-radius:10px;padding:4px;background:rgba(0,0,0,.4);border:1px solid var(--border);}
 .gate-tab{flex:1;padding:8px;border-radius:7px;border:0;background:transparent;font-family:var(--font-m);font-size:10px;letter-spacing:1.5px;color:var(--muted);cursor:pointer;transition:.2s;}
@@ -311,13 +332,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 <!-- ═══════════ LOGIN OVERLAY ═══════════ -->
 <div id="loginOverlay" class="show">
   <div class="gate-box">
-    <div class="brand-mark inline-flex items-center justify-center w-8 h-8 rounded-2xl mb-2">
-          <img src="images/metapro2.png" alt="MetaPro Logo" class="h-8 w-8 object-contain">
-    </div>    
+    <div class="brand-mark">
+      <img src="images/metapro2.png" alt="MetaPro Logo">
+    </div>
     <div class="gate-logo">METAPRO</div>
     <div class="gate-tagline">PROFESIONAL MARKET ANALYS</div>
-    <div class="gate-tagline">Version 1.0.9</div>
-
+    <div class="gate-tagline" style="margin-bottom: 18px; opacity: 0.75;">Version 1.0.9</div>
+    
     <div class="gate-tabs">
       <button class="gate-tab active" id="tabLogin" onclick="showLoginForm()">LOGIN</button>
       <button class="gate-tab" id="tabRegister" onclick="showRegisterForm()">DAFTAR</button>
